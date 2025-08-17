@@ -4,6 +4,19 @@
 
 ด้านล่างคือคู่มือพร้อมตัวอย่างครบทุก interface และทุก handler ที่มีในโปรเจกต์นี้ เพื่อให้คุณนำไปใช้/ต่อยอดได้ทันที
 
+### สารบัญสั้น
+
+- ติดตั้งและนำเข้า
+- Quick Start (Global logger, Context logger)
+- Middleware (net/http, Gin, OTel, SafePrometheus)
+- Inbound Adapters (HTTPAdapter, CLIAdapter, MiddlewareAdapter)
+- Logger API ครบทุกเมธอด (Ctx, F, Fs, Err, TID/SID/UID/RID/IP/Sess/Tenant/Mod)
+- Use cases/Service (LogWithContext, LogErr, LogStruct)
+- Features/ErrCategories (ตัวอย่างครบ)
+- Outbound Ports & Adapters (Sinks, Buffered/Multiplex, Formatters, Metrics, ConfigSrc, TraceSrc, HTTPClient, Cache)
+- เครื่องมือ/ยูทิลิตี้ (ParseLevel, GetLoggerFromContext, GenerateRequestID)
+- Best practices/ความปลอดภัย
+
 ### ติดตั้งและนำเข้าแพ็กเกจ
 
 ```go
@@ -59,6 +72,13 @@ logger, _ := obsv.NewLogger(obsv.WithLevel(obsv.InfoLevel), obsv.WithSinks(multi
 logger.Info("write via multiplex+buffered")
 ```
 
+### ใช้งาน Global Logger อย่างเร็ว
+
+```go
+obsv.Info("service started")
+obsv.WithField("module", "billing").Error("payment failed")
+```
+
 ### Formatters (Outbound)
 
 ```go
@@ -70,6 +90,8 @@ logfmt := obsv.NewLogfmtFormatter()
 // ผูกกับ StdoutSink ที่ระดับอะแดปเตอร์โดยตรง (ตัวอย่างจาก adapters/outbound)
 _ = outboundAdapter.NewStdoutSink(outboundAdapter.NewPrettyJSONFormatter())
 ```
+
+หมายเหตุ: Formatter จะ scrub ข้อมูลอ่อนไหวอัตโนมัติ (password, token, secret, api_key ฯลฯ) จาก `entry.Fields` ระดับบนสุด
 
 ### Metrics (Prometheus) ตัวอย่างครบ
 
@@ -158,6 +180,17 @@ srv := &http.Server{Addr: ":8080", Handler: wrapped}
 _ = srv.ListenAndServe()
 ```
 
+### การดึง Logger จาก Context
+
+```go
+// ใน handler ของคุณ (net/http)
+func handler(w http.ResponseWriter, r *http.Request) {
+    if lg, ok := obsvbrutal.GetLoggerFromContext(r.Context()); ok {
+        lg.Info("got logger from context")
+    }
+}
+```
+
 ### Inbound Adapters: HTTPAdapter (ครบทุก Handler)
 
 อะแดปเตอร์นี้เพิ่ม REST endpoints สำหรับการ log และ config
@@ -230,6 +263,48 @@ m := inboundAdapter.NewMiddlewareAdapter(logger)
 r := gin.New()
 r.Use(m.GinLoggingMiddleware())
 r.Use(m.GinErrorHandlingMiddleware())
+```
+
+### Logger API ครบทุกเมธอด (ตัวอย่างสั้นๆ)
+
+```go
+lg, _ := obsv.NewLogger(obsv.WithLevel(obsv.DebugLevel))
+lg = lg.Ctx(context.Background()).
+    F("k", "v").Fs(map[string]any{"x":1}).
+    TID("trace-1").SID("span-1").UID("user-1").RID("req-1").
+    IP("127.0.0.1").Sess("sess-1").Tenant("tenant-1").Mod("orders")
+
+lg.Debug("debug msg")
+lg.Info("info msg")
+lg.Warn("warn msg")
+lg.Err(fmt.Errorf("boom")).Error("error msg")
+lg.Fatal("fatal msg")
+
+// ระดับ log
+lg.Level(obsv.WarnLevel)
+cur := lg.GetLevel()
+
+// ตัวนับ
+_ = lg.Logged()
+_ = lg.Filtered()
+```
+
+### Use Case / Service (LogWithContext, LogErr, LogStruct)
+
+```go
+// สร้าง registry อย่างง่าย (ตัวอย่างเทสควรมี implementation จริงจังในโปรเจ็กต์)
+featureRegistry := NewInMemoryFeatureRegistry() // สมมติ
+errRegistry := NewInMemoryErrCategoryRegistry() // สมมติ
+
+cfgSrc, _ := outboundAdapter.NewRedisConfigProvider("127.0.0.1:6379", "", 0, "obsv:")
+metrics := outboundAdapter.NewSimpleMetricsProvider()
+
+uc := usecases.NewLoggingUseCase(lg, featureRegistry, errRegistry, cfgSrc, metrics)
+
+ctx := context.Background()
+_ = uc.LogWithContext(ctx, obsv.InfoLevel, "hello", map[string]any{"k":"v"})
+_ = uc.LogErr(ctx, fmt.Errorf("boom"), "validation", map[string]any{"field":"email"})
+_ = uc.LogStruct(ctx, domain.StructuredError{Code:"E100", Message:"db error", Category:"database"})
 ```
 
 ### Core Middlewares (ภายใต้ `pkg/obsvbrutal/middleware.go`)
@@ -476,6 +551,37 @@ logging:
 ---
 
 ## หมายเหตุและแนวทางต่อยอด
+- ความปลอดภัย/ความเป็นส่วนตัวของข้อมูล
+  - ระบบจะ scrub คีย์อ่อนไหว (password/token/secret/api_key ฯลฯ) ใน `Fields` อัตโนมัติ
+  - มิดเดิลแวร์จะไม่ log body แบบ `multipart/form-data` โดยค่าเริ่มต้น และจำกัดขนาด body ที่อ่าน
+  - แนะนำให้ทำ allowlist/denylist เส้นทาง/คีย์สำหรับการ log body เพิ่มตามนโยบายของทีม
+
+- การใช้ Context และ Logger ในแอปจริง
+  - ใช้ `GetLoggerFromContext(ctx)` เพื่อดึง logger ที่ผูกกับ request ในส่วนลึกของโค้ด
+  - มีการใส่ logger ลง context ทั้งแบบ typed และ string key เพื่อความเข้ากันได้
+
+- `HTTPSink`
+  - มี retry แบบ exponential backoff และแบ่ง batch อัตโนมัติเมื่อ payload ใหญ่ (~1MB)
+
+- `BufferedSink`
+  - หาก buffer เต็มจะ drop พร้อมนับจำนวน (atomic) และเตือนทาง stderr
+
+- Redis Config
+  - แนะนำเปิด `notify-keyspace-events` บน Redis เพื่อให้ subscribe การเปลี่ยนแปลงคอนฟิกทำงานได้เต็มที่ มิฉะนั้นระบบจะ fallback เป็นการโหลดเป็นระยะ (ควรปรับใช้ตามสภาพแวดล้อม)
+
+- เวอร์ชัน Go
+  - โปรเจ็กต์นี้ทดสอบกับ Go >= 1.21 (แนะนำใช้ toolchain เวอร์ชันเดียวกันใน CI/CD)
+
+---
+
+## ชุดตัวอย่างเพิ่มเติมในโค้ด (อ้างอิงโฟลเดอร์ `examples/`)
+
+- `examples/http-complete/`: รวม middleware, OTel, Prometheus, HTTPAdapter
+- `examples/features/`: สาธิตการใช้ Feature และ ErrCategories
+- `examples/trace/`: สาธิตการใช้งาน tracing
+- `examples/simple/`: ตัวอย่างเริ่มต้นอย่างย่อ
+- `examples/logger/`: ตัวอย่างการใช้ logger ตรงๆ
+
 
 - บาง interface เช่น `LogStorage`, `Queue`, `Factory` ในโปรเจกต์นี้เป็นสัญญาเพื่อให้คุณต่อยอด โดยตัวอย่างโค้ดในคู่มือแสดง skeleton ที่สามารถนำไป implement ได้ทันที
 - สำหรับ `ErrCategories` และ `Features` คุณสามารถสร้าง registry แบบ in-memory ง่าย ๆ ตาม interface แล้วส่งเข้า `usecases.NewLoggingUseCase`

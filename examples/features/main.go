@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"obs-brutal/pkg/obsvbrutal"
-	"obs-brutal/pkg/obsvbrutal/core/domain"
-	"obs-brutal/pkg/obsvbrutal/core/ports/inbound"
+	"obs-brutal/internal/core/domain"
+	"obs-brutal/internal/core/port/inbound"
+	"obs-brutal/obsvbrutal"
 	"sync"
 	"time"
 )
