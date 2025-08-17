@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"obs-brutal/pkg/obsvbrutal"
+	"obs-brutal/obsvbrutal"
 
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"

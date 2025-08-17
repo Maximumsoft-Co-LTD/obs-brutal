@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"obs-brutal/pkg/config"
-	"obs-brutal/pkg/obsvbrutal"
+	"obs-brutal/internal/app/config"
+	"obs-brutal/obsvbrutal"
 
 	"github.com/streadway/amqp"
 	"go.uber.org/fx"

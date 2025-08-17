@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
-	"obs-brutal/pkg/obsvbrutal"
+	"obs-brutal/obsvbrutal"
 	"time"
 
 	"github.com/gin-gonic/gin"

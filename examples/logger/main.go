@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"log"
-	"obs-brutal/pkg/obsvbrutal"
+	"obs-brutal/obsvbrutal"
 )
 
 // ตัวอย่างการใช้งาน Logger Interface แบบครบทุก method

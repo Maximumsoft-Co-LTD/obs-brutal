@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"obs-brutal/pkg/obsvbrutal"
+	"obs-brutal/obsvbrutal"
 	"time"
 
 	"github.com/gin-gonic/gin"
