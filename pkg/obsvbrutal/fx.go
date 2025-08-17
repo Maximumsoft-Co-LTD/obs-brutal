@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"obs-brutal/pkg/config"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -377,6 +376,8 @@ func NewGinMiddleware(params GinMiddlewareParams) GinMiddlewareResult {
 func NewGinRouter(
 	logMiddleware gin.HandlerFunc,
 	otelMiddleware gin.HandlerFunc,
+	prometheusMiddleware gin.HandlerFunc,
+	metricsMiddleware gin.HandlerFunc,
 ) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
@@ -386,6 +387,14 @@ func NewGinRouter(
 		router.Use(otelMiddleware)
 	} else {
 		router.Use(logMiddleware)
+	}
+
+	if prometheusMiddleware != nil {
+		router.Use(prometheusMiddleware)
+	}
+
+	if metricsMiddleware != nil {
+		router.Use(metricsMiddleware)
 	}
 
 	return router
@@ -406,34 +415,6 @@ func AsLogger() fx.Option {
 			fx.As(new(Logger)),
 		),
 	)
-}
-
-// Helper functions
-
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func getEnvBool(key string, defaultValue bool) bool {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	return value == "true" || value == "1" || value == "yes"
-}
-
-func getEnvInt(key string, defaultValue int) int {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	if i, err := strconv.Atoi(value); err == nil {
-		return i
-	}
-	return defaultValue
 }
 
 // startMetricsServerWithFallback starts metrics server and if the port is busy, it increments the port until available
