@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"time"
 
-	"obs-brutal/pkg/obsvbrutal"
+	"obs-brutal/obsvbrutal"
 
 	"github.com/robfig/cron/v3"
 	"go.opentelemetry.io/otel/trace"

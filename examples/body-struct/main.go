@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	lb "obs-brutal/pkg/obsvbrutal"
+	lb "obs-brutal/obsvbrutal"
 
 	"github.com/gin-gonic/gin"
 )

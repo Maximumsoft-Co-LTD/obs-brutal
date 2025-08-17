@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"obs-brutal/pkg/config"
-	"obs-brutal/pkg/obsvbrutal"
+	"obs-brutal/internal/app/config"
+	"obs-brutal/obsvbrutal"
 
 	"github.com/gin-gonic/gin"
 )
@@ -57,7 +57,7 @@ func main() {
 	// Initialize OpenTelemetry (optional, graceful degradation)
 	var provider *obsvbrutal.OTelProvider
 	if cfg.Otel.ENABLED {
-		provider, err = obsvbrutal.SafeInitOTel(
+		provider, err = config.SafeInitOTel(
 			cfg.AppSrv.SERVICE,
 			cfg.Otel.ENDPOINT,
 			cfg.Otel.INSECURE,

@@ -1,7 +1,7 @@
 package example
 
 import (
-	"obs-brutal/pkg/obsvbrutal"
+	"obs-brutal/obsvbrutal"
 
 	"github.com/gin-gonic/gin"
 )
