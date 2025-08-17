@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"obs-brutal/pkg/obsvbrutal"
+	"obs-brutal/obsvbrutal"
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/attribute"
