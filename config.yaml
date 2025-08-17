@@ -1,0 +1,88 @@
+# Service Configuration
+service:
+  service_name: OBS-BRUTAL-SERVICE
+  environment: production
+  port: :8080
+  gin_mode: release  # debug, release, test
+
+# Logging Configuration
+log_level: info  # debug, info, warn, error, fatal
+log_file: ./logs/obs-brutal.log # Empty means stdout only
+database:
+  mongodb:
+    enabled: false
+    addr: localhost:27017
+    password: ""
+    db: 0
+  redis:
+    enabled: false
+    addr: localhost:6379
+    password: ""
+    db: 0
+
+# OpenTelemetry Configuration
+otlp:
+  enabled: false
+  endpoint: localhost:4318
+  insecure: true  # Use insecure connection for local development
+
+# AMQP Configuration
+amqp:
+  enabled: false
+  url: "amqp://localhost:5672"
+
+# Loki Configuration (centralized logging)
+loki:
+  enabled: false
+  url: http://localhost:3100
+  labels:
+    app: obs-brutal-api
+    env: production
+    version: "1.0.0"
+
+# Metrics Configuration
+metrics:
+  enabled: false
+  port: 4018
+  path: /metrics
+  endpoint: localhost:9464
+  insecure: true
+
+# Performance Configuration
+performance:
+  # Sampling for high-volume logs
+  sampling:
+    enabled: false
+    rate: 0.1  # 10% sampling
+    
+  # Rate limiting
+  rate_limit:
+    enabled: false
+    max_per_second: 1000
+    
+  # Async logging
+  async:
+    enabled: false
+    buffer_size: 10000
+    flush_interval: 1s
+    
+  # Batching
+  batching:
+    enabled: false
+    size: 100
+    timeout: 5s
+
+# PII Masking Configuration
+masking:
+  enabled: false
+  
+  # Fields to mask
+  fields:
+    - password
+    - api_key
+    - credit_card
+    - access_token
+    - refresh_token
+    - secret
+    - private_key
+    - id_card
