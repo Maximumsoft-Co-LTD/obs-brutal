@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	cfg "obs-brutal/internal/app/config"
-	obsv "obs-brutal/obsvbrutal"
 	"strconv"
 	"strings"
 	"time"
+
+	cfg "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/app/config"
+	obsv "github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -19,7 +20,7 @@ import (
 )
 
 // Module provides FX module for Log Brutal
-var Module = fx.Module("obsvbrutal",
+var Module = fx.Module("logbrutal",
 	fx.Provide(
 		NewFxLogger,
 		NewFxOTelProvider,
@@ -112,7 +113,7 @@ func NewFxRedisConfigSrc(params ModuleParams) (FxRedisConfigSrcResult, error) {
 		fmt.Printf("WARNING: Failed to connect to Redis at %s: %v. Running without dynamic config.\n", params.Config.Database.Redis.ADDR, err)
 		return FxRedisConfigSrcResult{}, nil
 	}
-	configSrc, err := obsv.NewRedisConfigProvider(params.Config.Database.Redis.ADDR, params.Config.Database.Redis.PASSWORD, params.Config.Database.Redis.DB, "obsvbrutal:")
+	configSrc, err := obsv.NewRedisConfigProvider(params.Config.Database.Redis.ADDR, params.Config.Database.Redis.PASSWORD, params.Config.Database.Redis.DB, "logbrutal:")
 	if err != nil {
 		return FxRedisConfigSrcResult{}, fmt.Errorf("failed to create Redis config provider: %w", err)
 	}
@@ -203,7 +204,7 @@ func RegisterMetricsEndpoint(params metricsEndpointParams) {
 	}
 }
 
-var GinModule = fx.Module("obsvbrutal-gin", fx.Provide(NewGinMiddleware, NewGinRouter))
+var GinModule = fx.Module("logbrutal-gin", fx.Provide(NewGinMiddleware, NewGinRouter))
 
 type GinMiddlewareParams struct {
 	fx.In

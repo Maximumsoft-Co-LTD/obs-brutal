@@ -3,9 +3,10 @@ package outbound
 import (
 	"context"
 	"fmt"
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port/outbound"
 	"time"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/outbound"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

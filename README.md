@@ -1,4 +1,4 @@
-## คู่มือใช้งาน obs-brutal (Thai)
+## คู่มือใช้งาน github.com/Maximumsoft-Co-LTD/obs-brutal (Thai)
 
 ระบบนี้เป็นชุดเครื่องมือ Observability/Logging ที่ออกแบบแบบพอร์ตแยก Inbound/Outbound พร้อมอะแดปเตอร์, มิดเดิลแวร์สำหรับ HTTP/Gin, การเก็บเมตริก Prometheus และการ Trace ด้วย OpenTelemetry
 
@@ -21,9 +21,9 @@
 
 ```go
 import (
-    obsv "obs-brutal/pkg/obsvbrutal"
-    inboundAdapter "obs-brutal/pkg/obsvbrutal/adapters/inbound"
-    outboundAdapter "obs-brutal/pkg/obsvbrutal/adapters/outbound"
+    obsv "github.com/Maximumsoft-Co-LTD/obs-brutal/pkg/logbrutal"
+    inboundAdapter "github.com/Maximumsoft-Co-LTD/obs-brutal/pkg/logbrutal/adapters/inbound"
+    outboundAdapter "github.com/Maximumsoft-Co-LTD/obs-brutal/pkg/logbrutal/adapters/outbound"
 )
 ```
 
@@ -185,7 +185,7 @@ _ = srv.ListenAndServe()
 ```go
 // ใน handler ของคุณ (net/http)
 func handler(w http.ResponseWriter, r *http.Request) {
-    if lg, ok := obsvbrutal.GetLoggerFromContext(r.Context()); ok {
+    if lg, ok := logbrutal.GetLoggerFromContext(r.Context()); ok {
         lg.Info("got logger from context")
     }
 }
@@ -250,10 +250,10 @@ root := cli.Root()
 _ = root.Execute()
 
 // คำสั่งที่มี:
-// - obsvbrutal log -m "hello" -l info -f k=v --module api --tenant t1
-// - obsvbrutal feature list|get <name>
-// - obsvbrutal category list|get <category> | category error <category> <message>
-// - obsvbrutal config show|validate <file>
+// - logbrutal log -m "hello" -l info -f k=v --module api --tenant t1
+// - logbrutal feature list|get <name>
+// - logbrutal category list|get <category> | category error <category> <message>
+// - logbrutal config show|validate <file>
 ```
 
 ### Inbound Adapters: MiddlewareAdapter (Gin)
@@ -307,7 +307,7 @@ _ = uc.LogErr(ctx, fmt.Errorf("boom"), "validation", map[string]any{"field":"ema
 _ = uc.LogStruct(ctx, domain.StructuredError{Code:"E100", Message:"db error", Category:"database"})
 ```
 
-### Core Middlewares (ภายใต้ `pkg/obsvbrutal/middleware.go`)
+### Core Middlewares (ภายใต้ `pkg/logbrutal/middleware.go`)
 
 - **HTTPMiddleware(logger)**: net/http middleware สำหรับ log
 - **GinMiddleware(logger)**: Gin middleware สำหรับ log
@@ -497,7 +497,7 @@ func (q *InMemQueue) Sub(ctx context.Context, queue string, h func([]byte, map[s
 func (q *InMemQueue) Close() error { return nil }
 ```
 
-### Simple API (ใน `pkg/obsvbrutal/simple.go`)
+### Simple API (ใน `pkg/logbrutal/simple.go`)
 
 - **GinLogger** และ **Tracer** สำหรับงานกับ Gin ที่กระชับ
 
@@ -526,7 +526,7 @@ log.R(200, opts)
 - `MiddlewareAdapter` (Gin):
   - `GinLoggingMiddleware`, `GinErrorHandlingMiddleware`, `GinTracingMiddleware`
 
-- Core Middlewares (แพ็กเกจ `pkg/obsvbrutal`):
+- Core Middlewares (แพ็กเกจ `pkg/logbrutal`):
   - `HTTPMiddleware`, `GinMiddleware`, `OTelHTTPMiddleware`, `OTelGinMiddleware`
 
 - Prometheus:
@@ -587,4 +587,4 @@ logging:
 - สำหรับ `ErrCategories` และ `Features` คุณสามารถสร้าง registry แบบ in-memory ง่าย ๆ ตาม interface แล้วส่งเข้า `usecases.NewLoggingUseCase`
 - OTLP sink ฝั่ง log ยังเป็น placeholder เพื่อความเข้ากันได้กับ ecosystem OTel ในอนาคต (ใช้งาน Health/การตั้งค่า endpoint ได้)
 
-# obs-brutal
+# github.com/Maximumsoft-Co-LTD/obs-brutal

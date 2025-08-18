@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	obsvx "obs-brutal/internal/shared"
+	obsvx "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/shared"
 )
 
 // ValidateOTelConfig validates OpenTelemetry configuration

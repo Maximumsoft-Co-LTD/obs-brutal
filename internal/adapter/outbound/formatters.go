@@ -3,10 +3,11 @@ package outbound
 import (
 	"encoding/json"
 	"fmt"
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port/outbound"
 	"strings"
 	"time"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/outbound"
 )
 
 // scrub sensitive values by key

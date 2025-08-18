@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"obs-brutal/obsvbrutal"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/attribute"
@@ -14,11 +14,11 @@ import (
 
 // UserHandler handles user-related endpoints
 type UserHandler struct {
-	logger obsvbrutal.Logger
+	logger logbrutal.Logger
 }
 
 // NewUserHandler creates new user handler
-func NewUserHandler(logger obsvbrutal.Logger) *UserHandler {
+func NewUserHandler(logger logbrutal.Logger) *UserHandler {
 	return &UserHandler{
 		logger: logger.Mod("users"),
 	}
@@ -27,7 +27,7 @@ func NewUserHandler(logger obsvbrutal.Logger) *UserHandler {
 // CreateUser creates a new user
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	// Get request logger
-	reqLogger, _ := obsvbrutal.GetLoggerFromGinContext(c)
+	reqLogger, _ := logbrutal.GetLoggerFromGinContext(c)
 	if reqLogger == nil {
 		reqLogger = h.logger
 	}
@@ -60,7 +60,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	userID := fmt.Sprintf("user-%d", rand.Intn(10000))
 
 	// Start span for database operation
-	ctx, span := obsvbrutal.StartSpan(c.Request.Context(), "db.create_user")
+	ctx, span := logbrutal.StartSpan(c.Request.Context(), "db.create_user")
 	defer span.End()
 
 	// Simulate DB operation
@@ -87,7 +87,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 
 // GetUser gets user by ID
 func (h *UserHandler) GetUser(c *gin.Context) {
-	reqLogger, _ := obsvbrutal.GetLoggerFromGinContext(c)
+	reqLogger, _ := logbrutal.GetLoggerFromGinContext(c)
 	if reqLogger == nil {
 		reqLogger = h.logger
 	}
@@ -120,7 +120,7 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 
 // UpdateUser updates user by ID
 func (h *UserHandler) UpdateUser(c *gin.Context) {
-	reqLogger, _ := obsvbrutal.GetLoggerFromGinContext(c)
+	reqLogger, _ := logbrutal.GetLoggerFromGinContext(c)
 	if reqLogger == nil {
 		reqLogger = h.logger
 	}
@@ -153,7 +153,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 
 // DeleteUser deletes user by ID
 func (h *UserHandler) DeleteUser(c *gin.Context) {
-	reqLogger, _ := obsvbrutal.GetLoggerFromGinContext(c)
+	reqLogger, _ := logbrutal.GetLoggerFromGinContext(c)
 	if reqLogger == nil {
 		reqLogger = h.logger
 	}
@@ -169,11 +169,11 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 
 // OrderHandler handles order-related endpoints
 type OrderHandler struct {
-	logger obsvbrutal.Logger
+	logger logbrutal.Logger
 }
 
 // NewOrderHandler creates new order handler
-func NewOrderHandler(logger obsvbrutal.Logger) *OrderHandler {
+func NewOrderHandler(logger logbrutal.Logger) *OrderHandler {
 	return &OrderHandler{
 		logger: logger.Mod("orders"),
 	}
@@ -181,7 +181,7 @@ func NewOrderHandler(logger obsvbrutal.Logger) *OrderHandler {
 
 // CreateOrder creates a new order
 func (h *OrderHandler) CreateOrder(c *gin.Context) {
-	reqLogger, _ := obsvbrutal.GetLoggerFromGinContext(c)
+	reqLogger, _ := logbrutal.GetLoggerFromGinContext(c)
 	if reqLogger == nil {
 		reqLogger = h.logger
 	}
@@ -221,22 +221,22 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Step 1: Validate inventory
-	ctx, span1 := obsvbrutal.StartSpan(ctx, "order.validate_inventory")
+	ctx, span1 := logbrutal.StartSpan(ctx, "order.validate_inventory")
 	time.Sleep(30 * time.Millisecond)
 	span1.End()
 
 	// Step 2: Reserve inventory
-	ctx, span2 := obsvbrutal.StartSpan(ctx, "order.reserve_inventory")
+	ctx, span2 := logbrutal.StartSpan(ctx, "order.reserve_inventory")
 	time.Sleep(20 * time.Millisecond)
 	span2.End()
 
 	// Step 3: Process payment
-	ctx, span3 := obsvbrutal.StartSpan(ctx, "order.process_payment")
+	ctx, span3 := logbrutal.StartSpan(ctx, "order.process_payment")
 
 	// Simulate payment failure
 	if rand.Float32() < 0.1 {
 		err := fmt.Errorf("payment declined: insufficient funds")
-		obsvbrutal.RecordError(span3, err, "Payment processing failed")
+		logbrutal.RecordError(span3, err, "Payment processing failed")
 		span3.End()
 
 		reqLogger.
@@ -273,7 +273,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 
 // GetOrder gets order by ID
 func (h *OrderHandler) GetOrder(c *gin.Context) {
-	reqLogger, _ := obsvbrutal.GetLoggerFromGinContext(c)
+	reqLogger, _ := logbrutal.GetLoggerFromGinContext(c)
 	if reqLogger == nil {
 		reqLogger = h.logger
 	}
@@ -295,7 +295,7 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 
 // UpdateOrderStatus updates order status
 func (h *OrderHandler) UpdateOrderStatus(c *gin.Context) {
-	reqLogger, _ := obsvbrutal.GetLoggerFromGinContext(c)
+	reqLogger, _ := logbrutal.GetLoggerFromGinContext(c)
 	if reqLogger == nil {
 		reqLogger = h.logger
 	}
@@ -325,11 +325,11 @@ func (h *OrderHandler) UpdateOrderStatus(c *gin.Context) {
 
 // PaymentHandler handles payment operations
 type PaymentHandler struct {
-	logger obsvbrutal.Logger
+	logger logbrutal.Logger
 }
 
 // NewPaymentHandler creates new payment handler
-func NewPaymentHandler(logger obsvbrutal.Logger) *PaymentHandler {
+func NewPaymentHandler(logger logbrutal.Logger) *PaymentHandler {
 	return &PaymentHandler{
 		logger: logger.Mod("payments"),
 	}
@@ -337,7 +337,7 @@ func NewPaymentHandler(logger obsvbrutal.Logger) *PaymentHandler {
 
 // ProcessPayment processes a payment
 func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
-	reqLogger, _ := obsvbrutal.GetLoggerFromGinContext(c)
+	reqLogger, _ := logbrutal.GetLoggerFromGinContext(c)
 	if reqLogger == nil {
 		reqLogger = h.logger
 	}
@@ -379,7 +379,7 @@ func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
 
 // GetPaymentStatus gets payment status
 func (h *PaymentHandler) GetPaymentStatus(c *gin.Context) {
-	reqLogger, _ := obsvbrutal.GetLoggerFromGinContext(c)
+	reqLogger, _ := logbrutal.GetLoggerFromGinContext(c)
 	if reqLogger == nil {
 		reqLogger = h.logger
 	}
@@ -399,7 +399,7 @@ func (h *PaymentHandler) GetPaymentStatus(c *gin.Context) {
 
 // ProcessRefund processes a refund
 func (h *PaymentHandler) ProcessRefund(c *gin.Context) {
-	reqLogger, _ := obsvbrutal.GetLoggerFromGinContext(c)
+	reqLogger, _ := logbrutal.GetLoggerFromGinContext(c)
 	if reqLogger == nil {
 		reqLogger = h.logger
 	}

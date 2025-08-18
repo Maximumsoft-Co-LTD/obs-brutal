@@ -1,7 +1,7 @@
 package inbound
 
 import (
-	pin "obs-brutal/internal/core/port/inbound"
+	pin "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
 
 	"github.com/gin-gonic/gin"
 )

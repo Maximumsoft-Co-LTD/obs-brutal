@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"obs-brutal/obsvbrutal"
 	"time"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/attribute"
@@ -14,15 +15,15 @@ import (
 // ตัวอย่างการใช้งาน Trace Interface แบบครบทุก method
 func main() {
 	// Initialize logger
-	logger, err := obsvbrutal.NewLogger(
-		obsvbrutal.WithLevel(obsvbrutal.InfoLevel),
+	logger, err := logbrutal.NewLogger(
+		logbrutal.WithLevel(logbrutal.InfoLevel),
 	)
 	if err != nil {
 		log.Fatal("Failed to create logger:", err)
 	}
 
 	// Initialize OpenTelemetry
-	otelProvider, err := obsvbrutal.NewOTelProvider(
+	otelProvider, err := logbrutal.NewOTelProvider(
 		"trace-example",
 		"localhost:4317",
 		true,
@@ -35,7 +36,7 @@ func main() {
 
 	// Setup Gin
 	router := gin.New()
-	router.Use(obsvbrutal.GinMiddleware(logger))
+	router.Use(logbrutal.GinMiddleware(logger))
 
 	// Trace examples
 	router.GET("/trace/nested", demoNestedTraces)
@@ -49,7 +50,7 @@ func main() {
 
 // 1. Nested traces: Parent creating child traces
 func demoNestedTraces(c *gin.Context) {
-	log := obsvbrutal.GetLogFrmGin(c, "NestedTraceDemo")
+	log := logbrutal.GetLogFrmGin(c, "NestedTraceDemo")
 	defer log.Close()
 
 	// Root trace
@@ -101,7 +102,7 @@ func demoNestedTraces(c *gin.Context) {
 
 // 2. Trace attributes: All attribute methods
 func demoTraceAttributes(c *gin.Context) {
-	log := obsvbrutal.GetLogFrmGin(c, "AttributesDemo")
+	log := logbrutal.GetLogFrmGin(c, "AttributesDemo")
 	defer log.Close()
 
 	trace := log.FlatPr("attributes.demo")
@@ -146,7 +147,7 @@ func demoTraceAttributes(c *gin.Context) {
 
 // 3. Error handling in traces: Err, Errf
 func demoTraceErrors(c *gin.Context) {
-	log := obsvbrutal.GetLogFrmGin(c, "ErrorTraceDemo")
+	log := logbrutal.GetLogFrmGin(c, "ErrorTraceDemo")
 	defer log.Close()
 
 	scenario := c.Query("scenario")
@@ -197,7 +198,7 @@ func demoTraceErrors(c *gin.Context) {
 
 // 4. Complete flow example
 func demoCompleteFlow(c *gin.Context) {
-	log := obsvbrutal.GetLogFrmGin(c, "CompleteFlowDemo")
+	log := logbrutal.GetLogFrmGin(c, "CompleteFlowDemo")
 	defer log.Close()
 
 	// Main operation trace
@@ -215,7 +216,7 @@ func demoCompleteFlow(c *gin.Context) {
 		validationTrace.Err(err)
 		validationTrace.End()
 		mainTrace.End()
-		var opts = obsvbrutal.OptsResponse()
+		var opts = logbrutal.OptsResponse()
 		log.R(400, opts.Msg("Validation failed"), opts.Detail(err.Error())).Err(err)
 		return
 	}
@@ -270,7 +271,7 @@ func demoCompleteFlow(c *gin.Context) {
 	)
 	mainTrace.End()
 
-	var opts = obsvbrutal.OptsResponse()
+	var opts = logbrutal.OptsResponse()
 	log.R(201, opts.Msg("User registered successfully"), opts.Response(gin.H{
 		"user_id": userID,
 		"email":   "newuser@example.com",

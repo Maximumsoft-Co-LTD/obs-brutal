@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	pin "obs-brutal/internal/core/port/inbound"
+	pin "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/attribute"

@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"obs-brutal/internal/core/port/inbound"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
 
 	"github.com/gin-gonic/gin"
 )

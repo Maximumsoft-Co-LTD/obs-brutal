@@ -2,11 +2,12 @@ package usecases
 
 import (
 	"context"
-	"obs-brutal/internal/core/domain"
-	portsIn "obs-brutal/internal/core/port/inbound"
-	portsOut "obs-brutal/internal/core/port/outbound"
 	"sync"
 	"time"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	portsIn "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
+	portsOut "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/outbound"
 )
 
 // LoggingUseCase handles logging business logic

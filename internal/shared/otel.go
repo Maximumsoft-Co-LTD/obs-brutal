@@ -23,8 +23,8 @@ import (
 	"google.golang.org/grpc"
 	grpcinsecure "google.golang.org/grpc/credentials/insecure"
 
-	"obs-brutal/internal/core/domain"
-	pin "obs-brutal/internal/core/port/inbound"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	pin "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
 )
 
 // OTelProvider provides OpenTelemetry integration
@@ -47,11 +47,11 @@ func NewOTelProvider(serviceName, endpoint string, insecure bool) (*OTelProvider
 	// Check if there's already a global tracer provider
 	if tp, ok := otel.GetTracerProvider().(*sdktrace.TracerProvider); ok && tp != nil {
 		// Use existing provider
-		meter := otel.GetMeterProvider().Meter("obsvbrutal")
+		meter := otel.GetMeterProvider().Meter("logbrutal")
 		return &OTelProvider{
 			tracerProvider: tp,
 			meterProvider:  nil, // Can't get meter provider from global
-			tracer:         tp.Tracer("obsvbrutal"),
+			tracer:         tp.Tracer("logbrutal"),
 			meter:          meter,
 			propagator:     otel.GetTextMapPropagator(),
 		}, nil
@@ -134,10 +134,10 @@ func NewOTelProvider(serviceName, endpoint string, insecure bool) (*OTelProvider
 	))
 
 	// Create meters
-	meter := meterProvider.Meter("obsvbrutal")
+	meter := meterProvider.Meter("logbrutal")
 
 	logCounter, err := meter.Int64Counter(
-		"obsvbrutal.logs.total",
+		"logbrutal.logs.total",
 		metric.WithDescription("Total number of logs"),
 		metric.WithUnit("1"),
 	)
@@ -146,7 +146,7 @@ func NewOTelProvider(serviceName, endpoint string, insecure bool) (*OTelProvider
 	}
 
 	logLatency, err := meter.Float64Histogram(
-		"obsvbrutal.log.latency",
+		"logbrutal.log.latency",
 		metric.WithDescription("Log processing latency"),
 		metric.WithUnit("ms"),
 	)
@@ -155,7 +155,7 @@ func NewOTelProvider(serviceName, endpoint string, insecure bool) (*OTelProvider
 	}
 
 	errorCounter, err := meter.Int64Counter(
-		"obsvbrutal.errors.total",
+		"logbrutal.errors.total",
 		metric.WithDescription("Total number of errors logged"),
 		metric.WithUnit("1"),
 	)
@@ -164,7 +164,7 @@ func NewOTelProvider(serviceName, endpoint string, insecure bool) (*OTelProvider
 	}
 
 	activeRequests, err := meter.Int64UpDownCounter(
-		"obsvbrutal.active_requests",
+		"logbrutal.active_requests",
 		metric.WithDescription("Number of active requests"),
 		metric.WithUnit("1"),
 	)
@@ -175,7 +175,7 @@ func NewOTelProvider(serviceName, endpoint string, insecure bool) (*OTelProvider
 	return &OTelProvider{
 		tracerProvider: tracerProvider,
 		meterProvider:  meterProvider,
-		tracer:         tracerProvider.Tracer("obsvbrutal"),
+		tracer:         tracerProvider.Tracer("logbrutal"),
 		meter:          meter,
 		propagator:     otel.GetTextMapPropagator(),
 		logCounter:     logCounter,
@@ -293,7 +293,7 @@ func StartSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) 
 		return ctx, trace.SpanFromContext(ctx)
 	}
 
-	tracer := otel.Tracer("obsvbrutal")
+	tracer := otel.Tracer("logbrutal")
 	if tracer == nil {
 		return ctx, trace.SpanFromContext(ctx)
 	}

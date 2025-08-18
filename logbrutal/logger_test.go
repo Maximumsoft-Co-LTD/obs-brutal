@@ -1,19 +1,19 @@
-package obsvbrutal_test
+package logbrutal_test
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 
-	"obs-brutal/obsvbrutal"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 )
 
 // TestLoggerInterface ทดสอบ Logger interface methods
 func TestLoggerInterface(t *testing.T) {
 	// สร้าง test logger
-	logger := obsvbrutal.NewMockLogger()
+	logger := logbrutal.NewMockLogger()
 
 	t.Run("Context Methods", func(t *testing.T) {
 		// Test Ctx
@@ -101,7 +101,7 @@ func TestLoggerInterface(t *testing.T) {
 
 	t.Run("Metrics", func(t *testing.T) {
 		// Reset counts
-		logger = obsvbrutal.NewMockLogger()
+		logger = logbrutal.NewMockLogger()
 
 		// Log some messages
 		logger.Info("Test 1")
@@ -148,9 +148,9 @@ func TestLoggerInterface(t *testing.T) {
 // TestLoggerWithRealImplementation ทดสอบกับ implementation จริง
 func TestLoggerWithRealImplementation(t *testing.T) {
 	// สร้าง logger จริง
-	logger, err := obsvbrutal.NewLogger(
-		obsvbrutal.WithLevel(obsvbrutal.InfoLevel),
-		obsvbrutal.WithSinks(obsvbrutal.NewStdoutSink()),
+	logger, err := logbrutal.NewLogger(
+		logbrutal.WithLevel(logbrutal.InfoLevel),
+		logbrutal.WithSinks(logbrutal.NewStdoutSink()),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -195,10 +195,10 @@ func TestLoggerWithRealImplementation(t *testing.T) {
 // TestSafeLogger ทดสอบ SafeLogger ที่ป้องกัน panic
 func TestSafeLogger(t *testing.T) {
 	// สร้าง logger ที่อาจ panic
-	var nilLogger obsvbrutal.Logger
+	var nilLogger logbrutal.Logger
 
 	// Wrap with safe logger
-	safeLogger := obsvbrutal.NewSafeLogger(nilLogger)
+	safeLogger := logbrutal.NewSafeLogger(nilLogger)
 
 	t.Run("No Panic", func(t *testing.T) {
 		// These should not panic
@@ -213,7 +213,7 @@ func TestSafeLogger(t *testing.T) {
 		safeLogger.F("key", "value")
 		safeLogger.Err(nil)
 		safeLogger.TID("123")
-		safeLogger.Level(obsvbrutal.DebugLevel)
+		safeLogger.Level(logbrutal.DebugLevel)
 		safeLogger.GetLevel()
 		safeLogger.Logged()
 	})

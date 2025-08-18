@@ -3,17 +3,18 @@ package main
 import (
 	"context"
 	"log"
-	"obs-brutal/obsvbrutal"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 )
 
 // ตัวอย่างการใช้งาน Logger Interface แบบครบทุก method
 func main() {
 	// สร้าง logger
-	logger, err := obsvbrutal.NewLogger(
-		obsvbrutal.WithLevel(obsvbrutal.InfoLevel),
-		obsvbrutal.WithSinks(
-			obsvbrutal.NewStdoutSink(),
-			obsvbrutal.NewFileSink("app.log", 100, 30, 10, true),
+	logger, err := logbrutal.NewLogger(
+		logbrutal.WithLevel(logbrutal.InfoLevel),
+		logbrutal.WithSinks(
+			logbrutal.NewStdoutSink(),
+			logbrutal.NewFileSink("app.log", 100, 30, 10, true),
 		),
 	)
 	if err != nil {
@@ -37,7 +38,7 @@ func main() {
 }
 
 // 1. Context methods: Ctx, F, Fs, Err
-func demoContextMethods(logger obsvbrutal.Logger) {
+func demoContextMethods(logger logbrutal.Logger) {
 	log.Println("\n=== Context Methods Demo ===")
 
 	// Context with trace
@@ -63,7 +64,7 @@ func demoContextMethods(logger obsvbrutal.Logger) {
 }
 
 // 2. Correlation IDs: TID, SID, UID, RID, IP, Sess, Tenant, Mod
-func demoCorrelationIDs(logger obsvbrutal.Logger) {
+func demoCorrelationIDs(logger logbrutal.Logger) {
 	log.Println("\n=== Correlation IDs Demo ===")
 
 	// Complete request tracking
@@ -81,7 +82,7 @@ func demoCorrelationIDs(logger obsvbrutal.Logger) {
 }
 
 // 3. Logging methods: Debug, Info, Warn, Error, Fatal
-func demoLoggingMethods(logger obsvbrutal.Logger) {
+func demoLoggingMethods(logger logbrutal.Logger) {
 	log.Println("\n=== Logging Methods Demo ===")
 
 	// Different log levels
@@ -93,13 +94,13 @@ func demoLoggingMethods(logger obsvbrutal.Logger) {
 
 	// With additional fields using domain.Field
 	logger.Info("Order processed",
-		obsvbrutal.Field{Key: "order_id", Value: "ORD-123"},
-		obsvbrutal.Field{Key: "status", Value: "completed"},
+		logbrutal.Field{Key: "order_id", Value: "ORD-123"},
+		logbrutal.Field{Key: "status", Value: "completed"},
 	)
 }
 
 // 4. Configuration: Level, GetLevel
-func demoConfiguration(logger obsvbrutal.Logger) {
+func demoConfiguration(logger logbrutal.Logger) {
 	log.Println("\n=== Configuration Demo ===")
 
 	// Get current level
@@ -107,22 +108,22 @@ func demoConfiguration(logger obsvbrutal.Logger) {
 	log.Printf("Current log level: %v", currentLevel)
 
 	// Change level at runtime
-	logger.Level(obsvbrutal.DebugLevel)
+	logger.Level(logbrutal.DebugLevel)
 	logger.Debug("Now debug logs are visible")
 
 	// Change back
-	logger.Level(obsvbrutal.InfoLevel)
+	logger.Level(logbrutal.InfoLevel)
 	logger.Debug("This debug log won't show")
 	logger.Info("But info logs still show")
 }
 
 // 5. Metrics: Logged, Filtered
-func demoMetrics(logger obsvbrutal.Logger) {
+func demoMetrics(logger logbrutal.Logger) {
 	log.Println("\n=== Metrics Demo ===")
 
 	// Log some messages
 	for i := 0; i < 10; i++ {
-		logger.Info("Test message", obsvbrutal.Field{Key: "index", Value: i})
+		logger.Info("Test message", logbrutal.Field{Key: "index", Value: i})
 	}
 
 	// Get metrics

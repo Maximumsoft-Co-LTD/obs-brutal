@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port/outbound"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/outbound"
 )
 
 // LokiSink sends logs to Loki

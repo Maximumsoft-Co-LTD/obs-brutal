@@ -1,18 +1,19 @@
-// Package obsvbrutal provides the public API for the Log Brutal logging system
-package obsvbrutal
+// Package logbrutal provides the public API for the Log Brutal logging system
+package logbrutal
 
 import (
 	"context"
 	"fmt"
 	"time"
 
-	adapIn "obs-brutal/internal/adapter/inbound"
-	"obs-brutal/internal/adapter/outbound"
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port/inbound"
-	ports "obs-brutal/internal/core/port/outbound"
-	"obs-brutal/internal/shared"
 	"os"
+
+	adapIn "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/inbound"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
+	ports "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/outbound"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/shared"
 
 	"github.com/gin-gonic/gin"
 	"github.com/streadway/amqp"

@@ -15,7 +15,7 @@ func StartFlatSpan(ctx context.Context, name string, opts ...trace.SpanStartOpti
 		return ctx, trace.SpanFromContext(ctx)
 	}
 
-	tracer := otel.Tracer("obsvbrutal")
+	tracer := otel.Tracer("logbrutal")
 	if tracer == nil {
 		return ctx, trace.SpanFromContext(ctx)
 	}

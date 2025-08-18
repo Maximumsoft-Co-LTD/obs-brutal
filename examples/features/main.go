@@ -4,18 +4,19 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port/inbound"
-	"obs-brutal/obsvbrutal"
 	"sync"
 	"time"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 )
 
 // ตัวอย่างการสร้าง Custom Features และ Error Categories
 func main() {
 	// สร้าง logger
-	logger, err := obsvbrutal.NewLogger(
-		obsvbrutal.WithLevel(obsvbrutal.InfoLevel),
+	logger, err := logbrutal.NewLogger(
+		logbrutal.WithLevel(logbrutal.InfoLevel),
 	)
 	if err != nil {
 		log.Fatal("Failed to create logger:", err)

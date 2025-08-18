@@ -2,8 +2,9 @@ package inbound
 
 import (
 	"context"
-	"obs-brutal/internal/core/domain"
 	"time"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 
 	"go.opentelemetry.io/otel/attribute"
 )

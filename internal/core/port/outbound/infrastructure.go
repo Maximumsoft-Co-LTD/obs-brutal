@@ -2,8 +2,9 @@ package outbound
 
 import (
 	"context"
-	"obs-brutal/internal/core/domain"
 	"time"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 )
 
 // Sink is an outbound port for writing logs to external systems

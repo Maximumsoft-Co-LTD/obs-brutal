@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port/outbound"
 	"os"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/outbound"
 
 	"github.com/natefinch/lumberjack"
 )

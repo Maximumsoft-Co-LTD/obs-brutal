@@ -1,18 +1,18 @@
 package example
 
 import (
-	"obs-brutal/obsvbrutal"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 
 	"github.com/gin-gonic/gin"
 )
 
 // EnhancedDemoHandler demonstrates enhanced features
 type EnhancedDemoHandler struct {
-	logger obsvbrutal.Logger
+	logger logbrutal.Logger
 }
 
 // NewEnhancedDemoHandler creates new enhanced demo handler
-func NewEnhancedDemoHandler(logger obsvbrutal.Logger) *EnhancedDemoHandler {
+func NewEnhancedDemoHandler(logger logbrutal.Logger) *EnhancedDemoHandler {
 	return &EnhancedDemoHandler{
 		logger: logger.Mod("enhanced_demo"),
 	}

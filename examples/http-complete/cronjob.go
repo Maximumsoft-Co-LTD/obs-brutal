@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"time"
 
-	"obs-brutal/obsvbrutal"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 
 	"github.com/robfig/cron/v3"
 	"go.opentelemetry.io/otel/trace"
@@ -14,15 +14,15 @@ import (
 
 // CronExample demonstrates cron job logging
 type CronExample struct {
-	logger   obsvbrutal.Logger
-	provider *obsvbrutal.OTelProvider
+	logger   logbrutal.Logger
+	provider *logbrutal.OTelProvider
 	cron     *cron.Cron
 }
 
 // NewCronExample creates cron example
 func NewCronExample(
-	logger obsvbrutal.Logger,
-	provider *obsvbrutal.OTelProvider,
+	logger logbrutal.Logger,
+	provider *logbrutal.OTelProvider,
 ) *CronExample {
 	return &CronExample{
 		logger:   logger.Mod("cronjob"),
@@ -115,7 +115,7 @@ func (e *CronExample) runJob(name string, handler func()) {
 	ctx := context.Background()
 	if e.provider != nil {
 		var span trace.Span
-		ctx, span = obsvbrutal.StartSpan(ctx, fmt.Sprintf("cronjob.%s", name))
+		ctx, span = logbrutal.StartSpan(ctx, fmt.Sprintf("cronjob.%s", name))
 		defer span.End()
 
 		// Update logger with trace context

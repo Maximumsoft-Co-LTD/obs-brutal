@@ -1,4 +1,4 @@
-package obsvbrutal_test
+package logbrutal_test
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"obs-brutal/obsvbrutal"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,8 +17,8 @@ func TestGinLoggerInterface(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	// สร้าง logger
-	logger, err := obsvbrutal.NewLogger(
-		obsvbrutal.WithLevel(obsvbrutal.InfoLevel),
+	logger, err := logbrutal.NewLogger(
+		logbrutal.WithLevel(logbrutal.InfoLevel),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -31,10 +31,10 @@ func TestGinLoggerInterface(t *testing.T) {
 		c.Request = httptest.NewRequest("GET", "/test", nil)
 
 		// ใช้ middleware
-		obsvbrutal.GinMiddleware(logger)(c)
+		logbrutal.GinMiddleware(logger)(c)
 
 		// Get Simple logger
-		log := obsvbrutal.GetLogFrmGin(c, "TestOperation")
+		log := logbrutal.GetLogFrmGin(c, "TestOperation")
 		defer log.Close()
 
 		if log == nil {
@@ -46,9 +46,9 @@ func TestGinLoggerInterface(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/test", nil)
-		obsvbrutal.GinMiddleware(logger)(c)
+		logbrutal.GinMiddleware(logger)(c)
 
-		log := obsvbrutal.GetLogFrmGin(c, "FieldTest")
+		log := logbrutal.GetLogFrmGin(c, "FieldTest")
 		defer log.Close()
 
 		// Test F (single field)
@@ -73,9 +73,9 @@ func TestGinLoggerInterface(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/test", nil)
-		obsvbrutal.GinMiddleware(logger)(c)
+		logbrutal.GinMiddleware(logger)(c)
 
-		log := obsvbrutal.GetLogFrmGin(c, "LogTest")
+		log := logbrutal.GetLogFrmGin(c, "LogTest")
 		defer log.Close()
 
 		// Test Prt
@@ -89,9 +89,9 @@ func TestGinLoggerInterface(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/test", nil)
-		obsvbrutal.GinMiddleware(logger)(c)
+		logbrutal.GinMiddleware(logger)(c)
 
-		log := obsvbrutal.GetLogFrmGin(c, "ErrorTest")
+		log := logbrutal.GetLogFrmGin(c, "ErrorTest")
 		defer log.Close()
 
 		// Test Err
@@ -111,10 +111,10 @@ func TestGinLoggerInterface(t *testing.T) {
 	t.Run("Response Building", func(t *testing.T) {
 		// สร้าง router สำหรับ test
 		router := gin.New()
-		router.Use(obsvbrutal.GinMiddleware(logger))
+		router.Use(logbrutal.GinMiddleware(logger))
 
 		router.GET("/test/response/:status", func(c *gin.Context) {
-			log := obsvbrutal.GetLogFrmGin(c, "ResponseTest")
+			log := logbrutal.GetLogFrmGin(c, "ResponseTest")
 			defer log.Close()
 
 			status := c.Param("status")
@@ -172,9 +172,9 @@ func TestGinLoggerInterface(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/test", nil)
-		obsvbrutal.GinMiddleware(logger)(c)
+		logbrutal.GinMiddleware(logger)(c)
 
-		log := obsvbrutal.GetLogFrmGin(c, "TraceTest")
+		log := logbrutal.GetLogFrmGin(c, "TraceTest")
 		defer log.Close()
 
 		// Create parent trace
@@ -213,9 +213,9 @@ func TestGinLoggerInterface(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/test", nil)
-		obsvbrutal.GinMiddleware(logger)(c)
+		logbrutal.GinMiddleware(logger)(c)
 
-		log := obsvbrutal.GetLogFrmGin(c, "IDTest")
+		log := logbrutal.GetLogFrmGin(c, "IDTest")
 		defer log.Close()
 
 		// Get TraceID and SpanID
@@ -230,15 +230,15 @@ func TestGinLoggerInterface(t *testing.T) {
 
 // TestGinLoggerEdgeCases ทดสอบ edge cases
 func TestGinLoggerEdgeCases(t *testing.T) {
-	logger, _ := obsvbrutal.NewLogger(obsvbrutal.WithLevel(obsvbrutal.InfoLevel))
+	logger, _ := logbrutal.NewLogger(logbrutal.WithLevel(logbrutal.InfoLevel))
 
 	t.Run("Nil Values", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/test", nil)
-		obsvbrutal.GinMiddleware(logger)(c)
+		logbrutal.GinMiddleware(logger)(c)
 
-		log := obsvbrutal.GetLogFrmGin(c, "NilTest")
+		log := logbrutal.GetLogFrmGin(c, "NilTest")
 		defer log.Close()
 
 		// Test with nil error
@@ -255,9 +255,9 @@ func TestGinLoggerEdgeCases(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/test", nil)
-		obsvbrutal.GinMiddleware(logger)(c)
+		logbrutal.GinMiddleware(logger)(c)
 
-		log := obsvbrutal.GetLogFrmGin(c, "LargeDataTest")
+		log := logbrutal.GetLogFrmGin(c, "LargeDataTest")
 		defer log.Close()
 
 		// Large string
@@ -280,9 +280,9 @@ func TestGinLoggerEdgeCases(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/test", nil)
-		obsvbrutal.GinMiddleware(logger)(c)
+		logbrutal.GinMiddleware(logger)(c)
 
-		log := obsvbrutal.GetLogFrmGin(c, "ConcurrentTest")
+		log := logbrutal.GetLogFrmGin(c, "ConcurrentTest")
 		defer log.Close()
 
 		// Test concurrent logging
@@ -304,15 +304,15 @@ func TestGinLoggerEdgeCases(t *testing.T) {
 // Benchmark GinLogger interface
 func BenchmarkGinLoggerInterface(b *testing.B) {
 	gin.SetMode(gin.TestMode)
-	logger, _ := obsvbrutal.NewLogger(obsvbrutal.WithLevel(obsvbrutal.InfoLevel))
+	logger, _ := logbrutal.NewLogger(logbrutal.WithLevel(logbrutal.InfoLevel))
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest("GET", "/test", nil)
-	obsvbrutal.GinMiddleware(logger)(c)
+	logbrutal.GinMiddleware(logger)(c)
 
 	b.Run("Simple Log", func(b *testing.B) {
-		log := obsvbrutal.GetLogFrmGin(c, "Benchmark")
+		log := logbrutal.GetLogFrmGin(c, "Benchmark")
 		defer log.Close()
 
 		b.ResetTimer()
@@ -322,7 +322,7 @@ func BenchmarkGinLoggerInterface(b *testing.B) {
 	})
 
 	b.Run("With Fields", func(b *testing.B) {
-		log := obsvbrutal.GetLogFrmGin(c, "Benchmark")
+		log := logbrutal.GetLogFrmGin(c, "Benchmark")
 		defer log.Close()
 
 		b.ResetTimer()
@@ -332,7 +332,7 @@ func BenchmarkGinLoggerInterface(b *testing.B) {
 	})
 
 	b.Run("Error Handling", func(b *testing.B) {
-		log := obsvbrutal.GetLogFrmGin(c, "Benchmark")
+		log := logbrutal.GetLogFrmGin(c, "Benchmark")
 		defer log.Close()
 
 		err := fmt.Errorf("benchmark error")

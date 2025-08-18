@@ -3,9 +3,10 @@ package inbound
 import (
 	"context"
 	"fmt"
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port/inbound"
 	"os"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
 
 	"github.com/spf13/cobra"
 )
@@ -33,7 +34,7 @@ func NewCLIAdapter(
 // Root creates the root CLI command
 func (a *CLIAdapter) Root() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "obsvbrutal",
+		Use:   "logbrutal",
 		Short: "Log Brutal CLI - High-performance logging system",
 		Long:  `Log Brutal is a high-performance, runtime-configurable logging system with OpenTelemetry integration.`,
 	}
@@ -210,7 +211,7 @@ func (a *CLIAdapter) Config() *cobra.Command {
 
 	showCmd := &cobra.Command{Use: "show", Short: "Show current configuration", RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println("Current configuration:")
-		fmt.Println("  Service: obs-brutal")
+		fmt.Println("  Service: github.com/Maximumsoft-Co-LTD/obs-brutal")
 		fmt.Println("  Environment: production")
 		fmt.Println("  Level: info")
 		return nil
