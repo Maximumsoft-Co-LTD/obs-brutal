@@ -122,10 +122,16 @@ func (p *Parent) ChildPr(name string) Tracer {
 // Parent compatibility method used by examples
 func (p *Parent) Parent(name string) Tracer { return p.ChildPr(name) }
 
-func (p *Parent) Body(name string, body interface{}) []attribute.KeyValue { return nil }
-func (p *Parent) Add(attrs ...attribute.KeyValue)                         { p.attr = append(p.attr, attrs...) }
-func (p *Parent) Str(key, value string) attribute.KeyValue                { return attribute.String(key, value) }
-func (p *Parent) Bool(key string, value bool) attribute.KeyValue          { return attribute.Bool(key, value) }
+func (p *Parent) Body(name string, body interface{}) []attribute.KeyValue {
+	// Convert body to attributes
+	if body == nil {
+		return []attribute.KeyValue{attribute.String(name, "null")}
+	}
+	return []attribute.KeyValue{attribute.String(name, fmt.Sprintf("%v", body))}
+}
+func (p *Parent) Add(attrs ...attribute.KeyValue)                { p.attr = append(p.attr, attrs...) }
+func (p *Parent) Str(key, value string) attribute.KeyValue       { return attribute.String(key, value) }
+func (p *Parent) Bool(key string, value bool) attribute.KeyValue { return attribute.Bool(key, value) }
 func (p *Parent) Num(key string, value float64) attribute.KeyValue {
 	return attribute.Float64(key, value)
 }

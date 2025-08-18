@@ -3,28 +3,25 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
-	inbound "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/inbound"
-	outbound "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound"
-	pin "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
-	usecases "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/usecase"
 	obsv "github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 
 	"github.com/gin-gonic/gin"
 )
 
 // minimal in-memory registries for demo
-type inMemFeatureReg struct{ m map[string]pin.Feature }
+type inMemFeatureReg struct{ m map[string]obsv.Feature }
 
-func (r *inMemFeatureReg) Register(name string, f pin.Feature) error {
+func (r *inMemFeatureReg) Register(name string, f obsv.Feature) error {
 	if r.m == nil {
-		r.m = map[string]pin.Feature{}
+		r.m = map[string]obsv.Feature{}
 	}
 	r.m[name] = f
 	return nil
 }
-func (r *inMemFeatureReg) Get(name string) (pin.Feature, error) {
+func (r *inMemFeatureReg) Get(name string) (obsv.Feature, error) {
 	if v, ok := r.m[name]; ok {
 		return v, nil
 	}
@@ -37,7 +34,7 @@ func (r *inMemFeatureReg) List() []string {
 	}
 	return a
 }
-func (r *inMemFeatureReg) Apply(l pin.Logger, names []string) pin.Logger {
+func (r *inMemFeatureReg) Apply(l obsv.Logger, names []string) obsv.Logger {
 	for _, n := range names {
 		if f, ok := r.m[n]; ok {
 			l = f.Apply(l)
@@ -46,16 +43,16 @@ func (r *inMemFeatureReg) Apply(l pin.Logger, names []string) pin.Logger {
 	return l
 }
 
-type inMemErrReg struct{ m map[string]pin.ErrHandler }
+type inMemErrReg struct{ m map[string]obsv.ErrHandler }
 
-func (r *inMemErrReg) Register(name string, h pin.ErrHandler) error {
+func (r *inMemErrReg) Register(name string, h obsv.ErrHandler) error {
 	if r.m == nil {
-		r.m = map[string]pin.ErrHandler{}
+		r.m = map[string]obsv.ErrHandler{}
 	}
 	r.m[name] = h
 	return nil
 }
-func (r *inMemErrReg) Get(name string) (pin.ErrHandler, error) {
+func (r *inMemErrReg) Get(name string) (obsv.ErrHandler, error) {
 	if v, ok := r.m[name]; ok {
 		return v, nil
 	}
@@ -68,15 +65,14 @@ func (r *inMemErrReg) List() []string {
 	}
 	return a
 }
-func (r *inMemErrReg) Handle(l pin.Logger, err error, cat string, det map[string]interface{}) {
+func (r *inMemErrReg) Handle(l obsv.Logger, err error, cat string, det map[string]interface{}) {
 	if h, ok := r.m[cat]; ok {
 		h.Handle(l, err, det)
 	}
 }
 
-// simple service adapter to satisfy inbound.Service
-
-type simpleService struct{ base pin.Logger }
+// simple service adapter
+type simpleService struct{ base obsv.Logger }
 
 func (s *simpleService) Log(ctx context.Context, level obsv.Level, msg string, fields map[string]interface{}) error {
 	log := s.base.Ctx(ctx)
@@ -104,8 +100,8 @@ func (s *simpleService) LogErr(ctx context.Context, err error, category string, 
 func (s *simpleService) LogStruct(ctx context.Context, err obsv.StructuredError) error {
 	return s.LogErr(ctx, fmt.Errorf("%s", err.Error()), err.Category, err.Details)
 }
-func (s *simpleService) New(cfg pin.Config) (pin.Logger, error) { return s.base, nil }
-func (s *simpleService) NewSimple(ctx context.Context, operationName string) (pin.Simple, error) {
+func (s *simpleService) New(cfg obsv.Config) (obsv.Logger, error) { return s.base, nil }
+func (s *simpleService) NewSimple(ctx context.Context, operationName string) (obsv.Simple, error) {
 	return nil, nil
 }
 
@@ -114,27 +110,30 @@ func main() {
 	stdout := obsv.NewStdoutSink()
 	logger, _ := obsv.NewLogger(obsv.WithLevel(obsv.InfoLevel), obsv.WithSinks(stdout))
 
-	// 2) deps for usecase (kept for future extension)
-	feat := &inMemFeatureReg{}
-	errReg := &inMemErrReg{}
-	_, _ = feat, errReg
-	cfg, _ := outbound.NewRedisConfigProvider("127.0.0.1:6379", "", 0, "obsv:")
-	metrics := outbound.NewSimpleMetricsProvider()
-	_ = usecases.NewLoggingUseCase(logger, feat, errReg, cfg, metrics)
+	// 2) Create registries for features and error handlers
+	// feat := &inMemFeatureReg{}
+	// errReg := &inMemErrReg{}
 
 	// 3) HTTP adapter and Gin
 	r := obsv.NewGinEngine()
-	r.Use(inbound.GinMiddleware(logger))
-	api := inbound.NewHTTPAdapter(&simpleService{base: logger}, feat, errReg)
-	api.RegisterRoutes(r)
+	r.Use(obsv.GinMiddleware(logger))
 
 	// demo route
 	r.GET("/ping", func(c *gin.Context) {
-		if lg, ok := inbound.GetLoggerFromGinContext(c); ok {
-			lg.F("path", "/ping").Info("pong")
-		}
-		c.JSON(200, gin.H{"ok": "pong", "ts": time.Now().Unix()})
+		lg := obsv.GetLogFrmGin(c, "PingHandler")
+		defer lg.Close()
+
+		var tracer = lg.F("path", "/ping").FlatPr("ping")
+		defer tracer.End()
+		tracer.Add(
+			tracer.Str("path", "/ping"),
+			tracer.Str("method", "GET"),
+			tracer.Str("status", "200"),
+			tracer.Str("response", "pong"),
+		)
+		lg.R(http.StatusOK, obsv.OptsResponse().Response(gin.H{"ok": "pong", "ts": time.Now().Unix()}))
 	})
 
+	fmt.Println("Server starting on :8080")
 	_ = r.Run(":8080")
 }

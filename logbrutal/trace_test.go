@@ -202,6 +202,7 @@ func TestTracePerformance(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/test", nil)
 	logbrutal.GinMiddleware(logger)(c)
 
 	log := logbrutal.GetLogFrmGin(c, "PerfTest")
@@ -233,11 +234,10 @@ func TestTracePerformance(t *testing.T) {
 		start := time.Now()
 
 		// Create deeply nested traces (10 levels)
-		var currentTrace logbrutal.Trace
-		currentTrace = currentTrace.Parent("level.0")
+		currentTrace := log.FlatPr("level.0")
 
 		for i := 1; i < 10; i++ {
-			currentTrace = currentTrace.Parent(fmt.Sprintf("level.%d", i))
+			currentTrace = currentTrace.FlatPr(fmt.Sprintf("level.%d", i))
 		}
 
 		// End all traces (in reverse order)
