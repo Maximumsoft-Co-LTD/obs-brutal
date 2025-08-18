@@ -1,4 +1,4 @@
-module github.com/Maximumsoft-Co-LTD/obs-brutal
+module obs-brutal.yourdomain.com
 
 go 1.25
 

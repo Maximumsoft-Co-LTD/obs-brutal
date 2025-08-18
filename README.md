@@ -13,7 +13,7 @@ go mod tidy
 
 ### จาก Git Repository
 ```bash
-go get github.com/Maximumsoft-Co-LTD/obs-brutal
+go get obs-brutal.yourdomain.com
 ```
 
 ## 🎯 การเริ่มต้นใช้งาน
@@ -28,7 +28,7 @@ import (
     "net/http"
     "time"
     
-    obsv "github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
+    obsv "obs-brutal.yourdomain.com/logbrutal"
     "github.com/gin-gonic/gin"
 )
 
