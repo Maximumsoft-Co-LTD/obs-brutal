@@ -1,18 +1,18 @@
-package obsvbrutal_test
+package logbrutal_test
 
 import (
 	"fmt"
 	"sync"
 	"testing"
 
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port/inbound"
-	"obs-brutal/obsvbrutal"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 )
 
 // TestFeaturesInterface ทดสอบ Features interface
 func TestFeaturesInterface(t *testing.T) {
-	logger, _ := obsvbrutal.NewLogger(obsvbrutal.WithLevel(obsvbrutal.InfoLevel))
+	logger, _ := logbrutal.NewLogger(logbrutal.WithLevel(logbrutal.InfoLevel))
 
 	t.Run("Feature Registration", func(t *testing.T) {
 		registry := NewTestFeatureRegistry()
@@ -130,7 +130,7 @@ func TestFeaturesInterface(t *testing.T) {
 
 // TestErrorCategoriesInterface ทดสอบ ErrCategories interface
 func TestErrorCategoriesInterface(t *testing.T) {
-	logger, _ := obsvbrutal.NewLogger(obsvbrutal.WithLevel(obsvbrutal.InfoLevel))
+	logger, _ := logbrutal.NewLogger(logbrutal.WithLevel(logbrutal.InfoLevel))
 
 	t.Run("Handler Registration", func(t *testing.T) {
 		registry := NewTestErrorCategoryRegistry()

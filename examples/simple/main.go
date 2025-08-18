@@ -3,8 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
-	"obs-brutal/obsvbrutal"
 	"time"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 
 	"github.com/gin-gonic/gin"
 )
@@ -12,8 +13,8 @@ import (
 // ตัวอย่างการใช้งาน Simple Interface (GetLogFrmGin)
 func main() {
 	// สร้าง logger
-	logger, err := obsvbrutal.NewLogger(
-		obsvbrutal.WithLevel(obsvbrutal.InfoLevel),
+	logger, err := logbrutal.NewLogger(
+		logbrutal.WithLevel(logbrutal.InfoLevel),
 	)
 	if err != nil {
 		log.Fatal("Failed to create logger:", err)
@@ -21,7 +22,7 @@ func main() {
 
 	// สร้าง Gin router
 	router := gin.New()
-	router.Use(obsvbrutal.GinMiddleware(logger))
+	router.Use(logbrutal.GinMiddleware(logger))
 
 	// Example endpoints
 	router.GET("/demo/simple", demoSimpleInterface)
@@ -36,7 +37,7 @@ func main() {
 
 // 1. Field management: F, Fs
 func demoSimpleInterface(c *gin.Context) {
-	log := obsvbrutal.GetLogFrmGin(c, "SimpleDemo")
+	log := logbrutal.GetLogFrmGin(c, "SimpleDemo")
 	defer log.Close()
 
 	// Single field
@@ -59,7 +60,7 @@ func demoSimpleInterface(c *gin.Context) {
 
 // 2. Error handling: Err, EC (Error with Category)
 func demoErrorHandling(c *gin.Context) {
-	log := obsvbrutal.GetLogFrmGin(c, "ErrorDemo")
+	log := logbrutal.GetLogFrmGin(c, "ErrorDemo")
 	defer log.Close()
 
 	// Simulate different error scenarios
@@ -89,7 +90,7 @@ func demoErrorHandling(c *gin.Context) {
 
 	default:
 		// Structured error
-		structErr := obsvbrutal.StructuredError{
+		structErr := logbrutal.StructuredError{
 			Code:     "APP_001",
 			Message:  "Unknown error type",
 			Category: "unknown",
@@ -98,14 +99,14 @@ func demoErrorHandling(c *gin.Context) {
 			},
 		}
 		log.Err(fmt.Errorf("%s: %s", structErr.Code, structErr.Message))
-		var opts = obsvbrutal.OptsResponse()
+		var opts = logbrutal.OptsResponse()
 		log.R(400, opts.Msg("Unknown Error"), opts.Detail(structErr.Error()))
 	}
 }
 
 // 3. Tracing: Parent, Close
 func demoTracing(c *gin.Context) {
-	log := obsvbrutal.GetLogFrmGin(c, "TraceDemo")
+	log := logbrutal.GetLogFrmGin(c, "TraceDemo")
 	defer log.Close()
 
 	log.Prt("Starting trace demo")
@@ -136,7 +137,7 @@ func demoTracing(c *gin.Context) {
 		apiTrace.Err(err)
 	}
 	apiTrace.End()
-	var opts = obsvbrutal.OptsResponse()
+	var opts = logbrutal.OptsResponse()
 	log.R(200, opts.Msg("Trace demo completed"), opts.Response(gin.H{
 		"traces": []string{"database.query", "external.api.call"},
 	}))
@@ -144,7 +145,7 @@ func demoTracing(c *gin.Context) {
 
 // 4. Response building: R
 func demoResponseBuilder(c *gin.Context) {
-	log := obsvbrutal.GetLogFrmGin(c, "ResponseDemo")
+	log := logbrutal.GetLogFrmGin(c, "ResponseDemo")
 	defer log.Close()
 
 	action := c.Query("action")
@@ -152,7 +153,7 @@ func demoResponseBuilder(c *gin.Context) {
 	switch action {
 	case "success":
 		// Success response with data
-		var opts = obsvbrutal.OptsResponse()
+		var opts = logbrutal.OptsResponse()
 		log.R(200, opts.Msg("Operation successful"), opts.Response(gin.H{
 			"user_id": "123",
 			"name":    "John Doe",
@@ -161,7 +162,7 @@ func demoResponseBuilder(c *gin.Context) {
 
 	case "created":
 		// Created response
-		var opts = obsvbrutal.OptsResponse()
+		var opts = logbrutal.OptsResponse()
 		log.R(201, opts.Msg("Resource created"), opts.Response(gin.H{
 			"id":         "new-123",
 			"created_at": time.Now(),
@@ -170,12 +171,12 @@ func demoResponseBuilder(c *gin.Context) {
 	case "error":
 		// Error response
 		err := fmt.Errorf("something went wrong")
-		var opts = obsvbrutal.OptsResponse()
+		var opts = logbrutal.OptsResponse()
 		log.R(500, opts.Msg("Internal server error"), opts.Detail(err.Error()))
 
 	default:
 		// Not found
-		log.R(404, obsvbrutal.OptsResponse().
+		log.R(404, logbrutal.OptsResponse().
 			Msg("Action not found"))
 	}
 }

@@ -4,19 +4,20 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"obs-brutal/obsvbrutal"
 	"time"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 
 	"github.com/gin-gonic/gin"
 )
 
 // SimpleDemoHandler demonstrates the simple API
 type SimpleDemoHandler struct {
-	logger obsvbrutal.Logger
+	logger logbrutal.Logger
 }
 
 // NewSimpleDemoHandler creates new demo handler
-func NewSimpleDemoHandler(logger obsvbrutal.Logger) *SimpleDemoHandler {
+func NewSimpleDemoHandler(logger logbrutal.Logger) *SimpleDemoHandler {
 	return &SimpleDemoHandler{
 		logger: logger.Mod("simple_demo"),
 	}
@@ -24,14 +25,14 @@ func NewSimpleDemoHandler(logger obsvbrutal.Logger) *SimpleDemoHandler {
 
 // SimpleDemo shows basic simple API usage
 func (h *SimpleDemoHandler) SimpleDemo(c *gin.Context) {
-	logFrmGin := obsvbrutal.GetLogFrmGin(c, "SimpleDemo")
+	logFrmGin := logbrutal.GetLogFrmGin(c, "SimpleDemo")
 	defer logFrmGin.Close()
 
 	logFrmGin.Prt("Simple API demonstration")
 
 	// Simple response
 	logFrmGin.R(http.StatusOK,
-		obsvbrutal.OptsResponse().
+		logbrutal.OptsResponse().
 			Response(gin.H{
 				"message": "Simple API demo",
 				"time":    time.Now().Format(time.RFC3339),
@@ -41,7 +42,7 @@ func (h *SimpleDemoHandler) SimpleDemo(c *gin.Context) {
 
 // FluentDemo demonstrates fluent interface
 func (h *SimpleDemoHandler) FluentDemo(c *gin.Context) {
-	logFrmGin := obsvbrutal.GetLogFrmGin(c, "FluentDemo")
+	logFrmGin := logbrutal.GetLogFrmGin(c, "FluentDemo")
 	defer logFrmGin.Close()
 
 	// Fluent field addition
@@ -51,7 +52,7 @@ func (h *SimpleDemoHandler) FluentDemo(c *gin.Context) {
 		Prt("Fluent interface demonstration")
 
 	// Response with fluent options
-	var opts = obsvbrutal.OptsResponse()
+	var opts = logbrutal.OptsResponse()
 	logFrmGin.R(http.StatusOK,
 		opts.Msg("Fluent API demonstrated"),
 		opts.Response(gin.H{"status": "success"}),
@@ -60,7 +61,7 @@ func (h *SimpleDemoHandler) FluentDemo(c *gin.Context) {
 
 // TraceDemo demonstrates tracing functionality
 func (h *SimpleDemoHandler) TraceDemo(c *gin.Context) {
-	logFrmGin := obsvbrutal.GetLogFrmGin(c, "TraceDemo")
+	logFrmGin := logbrutal.GetLogFrmGin(c, "TraceDemo")
 	defer logFrmGin.Close()
 
 	// Start parent trace
@@ -82,9 +83,9 @@ func (h *SimpleDemoHandler) TraceDemo(c *gin.Context) {
 
 	// Response
 	logFrmGin.R(http.StatusOK,
-		obsvbrutal.OptsResponse().
+		logbrutal.OptsResponse().
 			Msg("Trace demo completed"),
-		obsvbrutal.OptsResponse().
+		logbrutal.OptsResponse().
 			Response(gin.H{
 				"trace_id": logFrmGin.GetTraceID(),
 				"span_id":  logFrmGin.GetSpanID(),
@@ -104,10 +105,10 @@ func (h *SimpleDemoHandler) CreateUserSimple(c *gin.Context) {
 	}
 
 	// Get logger from Gin context
-	logFrmGin := obsvbrutal.GetLogFrmGin(c, "CreateUser")
+	logFrmGin := logbrutal.GetLogFrmGin(c, "CreateUser")
 	defer logFrmGin.Close()
 
-	var opts = obsvbrutal.OptsResponse()
+	var opts = logbrutal.OptsResponse()
 
 	// Bind request
 	var req Body
@@ -120,7 +121,7 @@ func (h *SimpleDemoHandler) CreateUserSimple(c *gin.Context) {
 	}
 
 	// Log with struct fields (sensitive data will be masked)
-	fields := obsvbrutal.ExtractFields(req)
+	fields := logbrutal.ExtractFields(req)
 	for k, v := range fields {
 		logFrmGin.F(k, v)
 	}
@@ -164,7 +165,7 @@ func (h *SimpleDemoHandler) CreateUserSimple(c *gin.Context) {
 }
 
 // processUserCreation demonstrates nested traces
-func (h *SimpleDemoHandler) processUserCreation(parentTrace *obsvbrutal.Parent, userID string) error {
+func (h *SimpleDemoHandler) processUserCreation(parentTrace *logbrutal.Parent, userID string) error {
 	// Validate user data
 	valTrc := parentTrace.Parent("validate_user_data")
 	time.Sleep(30 * time.Millisecond)
@@ -209,19 +210,19 @@ func (h *SimpleDemoHandler) ProcessPaymentSimple(c *gin.Context) {
 		CustomerName string  `log:"customer_name" json:"customer_name"`
 	}
 
-	logFrmGin := obsvbrutal.GetLogFrmGin(c, "ProcessPayment")
+	logFrmGin := logbrutal.GetLogFrmGin(c, "ProcessPayment")
 	defer logFrmGin.Close()
 
 	var req PaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logFrmGin.R(http.StatusBadRequest,
-			obsvbrutal.OptsResponse().Detail(err.Error()),
+			logbrutal.OptsResponse().Detail(err.Error()),
 		).Err(err)
 		return
 	}
 
 	// Auto-log struct fields
-	fields := obsvbrutal.ExtractFields(req)
+	fields := logbrutal.ExtractFields(req)
 	for k, v := range fields {
 		logFrmGin.F(k, v)
 	}
@@ -237,7 +238,7 @@ func (h *SimpleDemoHandler) ProcessPaymentSimple(c *gin.Context) {
 		err := validateTrace.Errf("Amount too high: %.2f", req.Amount)
 		validateTrace.End()
 		rb := logFrmGin.R(http.StatusBadRequest,
-			obsvbrutal.OptsResponse().Msg("Payment validation failed"),
+			logbrutal.OptsResponse().Msg("Payment validation failed"),
 		)
 		rb.Err(err)
 		return

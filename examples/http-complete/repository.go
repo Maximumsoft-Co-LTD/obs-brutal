@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"obs-brutal/obsvbrutal"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
@@ -16,16 +16,16 @@ import (
 
 // RepositoryExample demonstrates database logging
 type RepositoryExample struct {
-	logger      obsvbrutal.Logger
-	provider    *obsvbrutal.OTelProvider
+	logger      logbrutal.Logger
+	provider    *logbrutal.OTelProvider
 	mongoClient *mongo.Client
 	redisClient *redis.Client
 }
 
 // NewRepositoryExample creates repository example
 func NewRepositoryExample(
-	logger obsvbrutal.Logger,
-	provider *obsvbrutal.OTelProvider,
+	logger logbrutal.Logger,
+	provider *logbrutal.OTelProvider,
 	redisClient *redis.Client,
 ) *RepositoryExample {
 	return &RepositoryExample{
@@ -85,7 +85,7 @@ type User struct {
 // CreateUser creates a user in MongoDB
 func (r *RepositoryExample) CreateUser(ctx context.Context, user *User) error {
 	// Start span
-	ctx, span, logger := obsvbrutal.StartSpanWithLogger(ctx, r.logger, "mongodb.create_user")
+	ctx, span, logger := logbrutal.StartSpanWithLogger(ctx, r.logger, "mongodb.create_user")
 	defer span.End()
 
 	logger.
@@ -103,7 +103,7 @@ func (r *RepositoryExample) CreateUser(ctx context.Context, user *User) error {
 	result, err := collection.InsertOne(ctx, user)
 	if err != nil {
 		logger.Err(err).Error("Failed to create user in MongoDB")
-		obsvbrutal.RecordError(span, err, "MongoDB insert failed")
+		logbrutal.RecordError(span, err, "MongoDB insert failed")
 		return err
 	}
 
@@ -122,7 +122,7 @@ func (r *RepositoryExample) CreateUser(ctx context.Context, user *User) error {
 // GetUser gets a user by ID
 func (r *RepositoryExample) GetUser(ctx context.Context, userID string) (*User, error) {
 	// Start span
-	ctx, span, logger := obsvbrutal.StartSpanWithLogger(ctx, r.logger, "repository.get_user")
+	ctx, span, logger := logbrutal.StartSpanWithLogger(ctx, r.logger, "repository.get_user")
 	defer span.End()
 
 	logger.
@@ -138,7 +138,7 @@ func (r *RepositoryExample) GetUser(ctx context.Context, userID string) (*User, 
 	}
 
 	// Get from MongoDB
-	_, mongoSpan := obsvbrutal.StartSpan(ctx, "mongodb.find_user")
+	_, mongoSpan := logbrutal.StartSpan(ctx, "mongodb.find_user")
 	defer mongoSpan.End()
 
 	collection := r.mongoClient.Database("example").Collection("users")
@@ -156,7 +156,7 @@ func (r *RepositoryExample) GetUser(ctx context.Context, userID string) (*User, 
 			Err(err).
 			F("user_id", userID).
 			Error("Failed to get user from MongoDB")
-		obsvbrutal.RecordError(mongoSpan, err, "MongoDB find failed")
+		logbrutal.RecordError(mongoSpan, err, "MongoDB find failed")
 		return nil, err
 	}
 
@@ -173,7 +173,7 @@ func (r *RepositoryExample) GetUser(ctx context.Context, userID string) (*User, 
 // UpdateUser updates a user
 func (r *RepositoryExample) UpdateUser(ctx context.Context, userID string, updates map[string]interface{}) error {
 	// Start span
-	ctx, span, logger := obsvbrutal.StartSpanWithLogger(ctx, r.logger, "mongodb.update_user")
+	ctx, span, logger := logbrutal.StartSpanWithLogger(ctx, r.logger, "mongodb.update_user")
 	defer span.End()
 
 	logger.
@@ -197,7 +197,7 @@ func (r *RepositoryExample) UpdateUser(ctx context.Context, userID string, updat
 			Err(err).
 			F("user_id", userID).
 			Error("Failed to update user in MongoDB")
-		obsvbrutal.RecordError(span, err, "MongoDB update failed")
+		logbrutal.RecordError(span, err, "MongoDB update failed")
 		return err
 	}
 
@@ -229,7 +229,7 @@ func (r *RepositoryExample) cacheUser(ctx context.Context, user *User) {
 	logger := r.getLogger(ctx)
 
 	// Start span
-	ctx, span := obsvbrutal.StartSpan(ctx, "redis.cache_user")
+	ctx, span := logbrutal.StartSpan(ctx, "redis.cache_user")
 	defer span.End()
 
 	key := fmt.Sprintf("user:%s", user.ID)
@@ -262,7 +262,7 @@ func (r *RepositoryExample) getCachedUser(ctx context.Context, userID string) *U
 	logger := r.getLogger(ctx)
 
 	// Start span
-	ctx, span := obsvbrutal.StartSpan(ctx, "redis.get_cached_user")
+	ctx, span := logbrutal.StartSpan(ctx, "redis.get_cached_user")
 	defer span.End()
 
 	key := fmt.Sprintf("user:%s", userID)
@@ -417,8 +417,8 @@ func (r *RepositoryExample) CheckRateLimit(ctx context.Context, key string, limi
 }
 
 // Helper method to get logger from context
-func (r *RepositoryExample) getLogger(ctx context.Context) obsvbrutal.Logger {
-	if logger, ok := obsvbrutal.GetLoggerFromContext(ctx); ok {
+func (r *RepositoryExample) getLogger(ctx context.Context) logbrutal.Logger {
+	if logger, ok := logbrutal.GetLoggerFromContext(ctx); ok {
 		return logger
 	}
 	return r.logger

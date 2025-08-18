@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	pin "obs-brutal/internal/core/port/inbound"
+	pin "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
 )
 
 // AMQPConsumerMiddleware provides logging middleware for AMQP consumers
@@ -248,7 +248,7 @@ func NewAMQPConsumer(channel *amqp.Channel, logger pin.Logger, provider *OTelPro
 // Consume starts consuming messages from a queue
 func (c *AMQPConsumer) Consume(ctx context.Context, queue string, handler AMQPHandler) error {
 	// Create consumer tag
-	consumerTag := fmt.Sprintf("obsvbrutal-%s-%d", queue, time.Now().UnixNano())
+	consumerTag := fmt.Sprintf("logbrutal-%s-%d", queue, time.Now().UnixNano())
 
 	// Start consuming
 	msgs, err := c.channel.Consume(
@@ -328,7 +328,7 @@ func NewAMQPBatchConsumer(channel *amqp.Channel, logger pin.Logger, provider *OT
 
 // ConsumeBatch consumes messages in batches
 func (c *AMQPBatchConsumer) ConsumeBatch(ctx context.Context, queue string, handler AMQPBatchHandler) error {
-	consumerTag := fmt.Sprintf("obsvbrutal-batch-%s-%d", queue, time.Now().UnixNano())
+	consumerTag := fmt.Sprintf("logbrutal-batch-%s-%d", queue, time.Now().UnixNano())
 
 	msgs, err := c.channel.Consume(
 		queue,

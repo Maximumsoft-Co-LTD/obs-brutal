@@ -3,9 +3,10 @@ package inbound
 import (
 	"context"
 	"fmt"
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port/inbound"
 	"runtime/debug"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
 )
 
 // SafeLoggerAdapter wraps a logger to prevent panics

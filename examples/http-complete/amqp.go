@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"obs-brutal/internal/app/config"
-	"obs-brutal/obsvbrutal"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/app/config"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 
 	"github.com/streadway/amqp"
 	"go.uber.org/fx"
@@ -15,15 +15,15 @@ import (
 
 // AMQPExample demonstrates AMQP integration
 type AMQPExample struct {
-	logger   obsvbrutal.Logger
-	provider *obsvbrutal.OTelProvider
+	logger   logbrutal.Logger
+	provider *logbrutal.OTelProvider
 	cfg      *config.ObsConfig
 }
 
 // NewAMQPExample creates AMQP example
 func NewAMQPExample(
-	logger obsvbrutal.Logger,
-	provider *obsvbrutal.OTelProvider,
+	logger logbrutal.Logger,
+	provider *logbrutal.OTelProvider,
 	cfg *config.ObsConfig,
 ) *AMQPExample {
 	return &AMQPExample{
@@ -77,7 +77,7 @@ func (e *AMQPExample) StartConsumer(ctx context.Context) error {
 	queues := []struct {
 		name       string
 		routingKey string
-		handler    obsvbrutal.AMQPHandler
+		handler    logbrutal.AMQPHandler
 	}{
 		{
 			name:       "orders",
@@ -124,16 +124,16 @@ func (e *AMQPExample) StartConsumer(ctx context.Context) error {
 		}
 
 		// Create consumer
-		consumer := obsvbrutal.NewAMQPConsumer(ch, e.logger, e.provider)
+		consumer := logbrutal.NewAMQPConsumer(ch, e.logger, e.provider)
 
 		// Start consuming in goroutine
-		go func(queueName string, handler obsvbrutal.AMQPHandler) {
+		go func(queueName string, handler logbrutal.AMQPHandler) {
 			e.logger.F("queue", queueName).Info("Starting AMQP consumer")
 
 			// Wrap with dead letter handling
-			wrappedHandler := obsvbrutal.DeadLetterHandler(
+			wrappedHandler := logbrutal.DeadLetterHandler(
 				handler,
-				obsvbrutal.NewAMQPPublisher(ch, e.logger, e.provider),
+				logbrutal.NewAMQPPublisher(ch, e.logger, e.provider),
 				"dlx",
 				"dead_letter",
 				3, // max retries
@@ -265,7 +265,7 @@ func (e *AMQPExample) startBatchConsumer(ctx context.Context, ch *amqp.Channel) 
 	}
 
 	// Create batch consumer
-	batchConsumer := obsvbrutal.NewAMQPBatchConsumer(
+	batchConsumer := logbrutal.NewAMQPBatchConsumer(
 		ch,
 		e.logger,
 		e.provider,
@@ -296,7 +296,7 @@ func (e *AMQPExample) startBatchConsumer(ctx context.Context, ch *amqp.Channel) 
 
 // startPublisher demonstrates publishing with logging
 func (e *AMQPExample) startPublisher(ctx context.Context, ch *amqp.Channel) {
-	publisher := obsvbrutal.NewAMQPPublisher(ch, e.logger, e.provider)
+	publisher := logbrutal.NewAMQPPublisher(ch, e.logger, e.provider)
 
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -346,8 +346,8 @@ func (e *AMQPExample) startPublisher(ctx context.Context, ch *amqp.Channel) {
 }
 
 // getMessageLogger gets logger from context or returns default
-func (e *AMQPExample) getMessageLogger(ctx context.Context) obsvbrutal.Logger {
-	if logger, ok := obsvbrutal.GetLoggerFromContext(ctx); ok {
+func (e *AMQPExample) getMessageLogger(ctx context.Context) logbrutal.Logger {
+	if logger, ok := logbrutal.GetLoggerFromContext(ctx); ok {
 		return logger
 	}
 	return e.logger

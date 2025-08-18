@@ -3,8 +3,9 @@ package outbound
 import (
 	"context"
 	"fmt"
-	"obs-brutal/internal/core/port/outbound"
 	"time"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/outbound"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"

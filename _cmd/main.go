@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	inbound "obs-brutal/internal/adapter/inbound"
-	outbound "obs-brutal/internal/adapter/outbound"
-	pin "obs-brutal/internal/core/port/inbound"
-	usecases "obs-brutal/internal/usecase"
-	obsv "obs-brutal/obsvbrutal"
+	inbound "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/inbound"
+	outbound "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound"
+	pin "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
+	usecases "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/usecase"
+	obsv "github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 
 	"github.com/gin-gonic/gin"
 )

@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"obs-brutal/internal/app/config"
-	"obs-brutal/obsvbrutal"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/app/config"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 
 	"github.com/gin-gonic/gin"
 )
@@ -42,8 +42,8 @@ func main() {
 	}
 
 	// Initialize logger [[memory:6403444]]
-	base, err := obsvbrutal.NewLogger(
-		obsvbrutal.WithLevel(obsvbrutal.ParseLevel(cfg.Log.LEVEL)),
+	base, err := logbrutal.NewLogger(
+		logbrutal.WithLevel(logbrutal.ParseLevel(cfg.Log.LEVEL)),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create logger: %v", err)
@@ -55,7 +55,7 @@ func main() {
 	logger.F("config_file", configPath).Info("Configuration loaded")
 
 	// Initialize OpenTelemetry (optional, graceful degradation)
-	var provider *obsvbrutal.OTelProvider
+	var provider *logbrutal.OTelProvider
 	if cfg.Otel.ENABLED {
 		provider, err = config.SafeInitOTel(
 			cfg.AppSrv.SERVICE,
@@ -73,7 +73,7 @@ func main() {
 	gin.SetMode(cfg.AppSrv.GIN_MODE)
 	r := gin.New()
 	r.Use(gin.Recovery())
-	r.Use(obsvbrutal.GinMiddleware(logger))
+	r.Use(logbrutal.GinMiddleware(logger))
 
 	// Store provider in context if available
 	if provider != nil {
@@ -128,7 +128,7 @@ func main() {
 	logger.Info("Server exited")
 }
 
-func setupRoutes(r *gin.Engine, logger obsvbrutal.Logger, provider *obsvbrutal.OTelProvider) {
+func setupRoutes(r *gin.Engine, logger logbrutal.Logger, provider *logbrutal.OTelProvider) {
 	// Health endpoints
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -151,7 +151,7 @@ func setupRoutes(r *gin.Engine, logger obsvbrutal.Logger, provider *obsvbrutal.O
 	{
 		// Nested tracing demo (hierarchical structure)
 		api.GET("/nested", func(c *gin.Context) {
-			tracer := obsvbrutal.GetLogFrmGin(c, "api.nested.demo")
+			tracer := logbrutal.GetLogFrmGin(c, "api.nested.demo")
 			defer tracer.Close()
 
 			tracer.Prt("Starting nested trace operation")
@@ -193,7 +193,7 @@ func setupRoutes(r *gin.Engine, logger obsvbrutal.Logger, provider *obsvbrutal.O
 
 		// Flat tracing demo (sibling structure)
 		api.GET("/flat", func(c *gin.Context) {
-			tracer := obsvbrutal.GetLogFrmGin(c, "api.flat.demo")
+			tracer := logbrutal.GetLogFrmGin(c, "api.flat.demo")
 			defer tracer.Close()
 
 			tracer.Prt("Starting flat trace operation")
@@ -229,7 +229,7 @@ func setupRoutes(r *gin.Engine, logger obsvbrutal.Logger, provider *obsvbrutal.O
 		// Demo logging with tracing
 		api.GET("/log", func(c *gin.Context) {
 			// Use GetLogFrmGin for automatic tracing
-			tracer := obsvbrutal.GetLogFrmGin(c, "api.log")
+			tracer := logbrutal.GetLogFrmGin(c, "api.log")
 			defer tracer.Close()
 
 			// Log with tracing
@@ -325,7 +325,7 @@ func setupRoutes(r *gin.Engine, logger obsvbrutal.Logger, provider *obsvbrutal.O
 		// Tracing demo
 		api.GET("/trace", func(c *gin.Context) {
 			// Use GetLogFrmGin for tracing (works even without provider)
-			tracer := obsvbrutal.GetLogFrmGin(c, "api.trace.demo")
+			tracer := logbrutal.GetLogFrmGin(c, "api.trace.demo")
 			defer tracer.Close()
 
 			tracer.Prt("Starting trace operation")
@@ -360,7 +360,7 @@ func setupRoutes(r *gin.Engine, logger obsvbrutal.Logger, provider *obsvbrutal.O
 			simulateWork()
 			saveSpan.End()
 
-			var opts = obsvbrutal.OptsResponse()
+			var opts = logbrutal.OptsResponse()
 			tracer.R(http.StatusOK, opts.Msg("Trace operation completed"), opts.Response(gin.H{
 				"trace_id":     tracer.GetTraceID(),
 				"span_id":      tracer.GetSpanID(),
@@ -438,7 +438,7 @@ func setupRoutes(r *gin.Engine, logger obsvbrutal.Logger, provider *obsvbrutal.O
 	}
 }
 
-func startMetricsServer(port int, path string, logger obsvbrutal.Logger) {
+func startMetricsServer(port int, path string, logger logbrutal.Logger) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		// In a real app, you would expose actual metrics here

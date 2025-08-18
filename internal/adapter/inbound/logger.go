@@ -3,13 +3,14 @@ package inbound
 import (
 	"context"
 	"fmt"
-	adapout "obs-brutal/internal/adapter/outbound"
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port/inbound"
-	portsout "obs-brutal/internal/core/port/outbound"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	adapout "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
+	portsout "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/outbound"
 
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"

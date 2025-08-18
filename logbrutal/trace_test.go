@@ -1,11 +1,11 @@
-package obsvbrutal_test
+package logbrutal_test
 
 import (
 	"fmt"
 	"testing"
 	"time"
 
-	"obs-brutal/obsvbrutal"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/logbrutal"
 
 	"net/http/httptest"
 
@@ -16,15 +16,15 @@ import (
 // TestTraceInterface ทดสอบ Trace interface
 func TestTraceInterface(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	logger, _ := obsvbrutal.NewLogger(obsvbrutal.WithLevel(obsvbrutal.InfoLevel))
+	logger, _ := logbrutal.NewLogger(logbrutal.WithLevel(logbrutal.InfoLevel))
 
 	t.Run("Basic Trace", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/test", nil)
-		obsvbrutal.GinMiddleware(logger)(c)
+		logbrutal.GinMiddleware(logger)(c)
 
-		log := obsvbrutal.GetLogFrmGin(c, "TraceTest")
+		log := logbrutal.GetLogFrmGin(c, "TraceTest")
 		defer log.Close()
 
 		// Create trace
@@ -41,9 +41,9 @@ func TestTraceInterface(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/test", nil)
-		obsvbrutal.GinMiddleware(logger)(c)
+		logbrutal.GinMiddleware(logger)(c)
 
-		log := obsvbrutal.GetLogFrmGin(c, "NestedTraceTest")
+		log := logbrutal.GetLogFrmGin(c, "NestedTraceTest")
 		defer log.Close()
 
 		// Root trace
@@ -70,9 +70,9 @@ func TestTraceInterface(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/test", nil)
-		obsvbrutal.GinMiddleware(logger)(c)
+		logbrutal.GinMiddleware(logger)(c)
 
-		log := obsvbrutal.GetLogFrmGin(c, "AttributeTest")
+		log := logbrutal.GetLogFrmGin(c, "AttributeTest")
 		defer log.Close()
 
 		trace := log.FlatPr("attribute.test")
@@ -140,9 +140,9 @@ func TestTraceInterface(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/test", nil)
-		obsvbrutal.GinMiddleware(logger)(c)
+		logbrutal.GinMiddleware(logger)(c)
 
-		log := obsvbrutal.GetLogFrmGin(c, "MultiAttrTest")
+		log := logbrutal.GetLogFrmGin(c, "MultiAttrTest")
 		defer log.Close()
 
 		trace := log.FlatPr("multi.attribute")
@@ -167,9 +167,9 @@ func TestTraceInterface(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/test", nil)
-		obsvbrutal.GinMiddleware(logger)(c)
+		logbrutal.GinMiddleware(logger)(c)
 
-		log := obsvbrutal.GetLogFrmGin(c, "ErrorTraceTest")
+		log := logbrutal.GetLogFrmGin(c, "ErrorTraceTest")
 		defer log.Close()
 
 		trace := log.FlatPr("error.test")
@@ -198,13 +198,13 @@ func TestTraceInterface(t *testing.T) {
 // TestTracePerformance ทดสอบ performance ของ trace
 func TestTracePerformance(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	logger, _ := obsvbrutal.NewLogger(obsvbrutal.WithLevel(obsvbrutal.InfoLevel))
+	logger, _ := logbrutal.NewLogger(logbrutal.WithLevel(logbrutal.InfoLevel))
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	obsvbrutal.GinMiddleware(logger)(c)
+	logbrutal.GinMiddleware(logger)(c)
 
-	log := obsvbrutal.GetLogFrmGin(c, "PerfTest")
+	log := logbrutal.GetLogFrmGin(c, "PerfTest")
 	defer log.Close()
 
 	t.Run("Many Traces", func(t *testing.T) {
@@ -233,7 +233,7 @@ func TestTracePerformance(t *testing.T) {
 		start := time.Now()
 
 		// Create deeply nested traces (10 levels)
-		var currentTrace obsvbrutal.Trace
+		var currentTrace logbrutal.Trace
 		currentTrace = currentTrace.Parent("level.0")
 
 		for i := 1; i < 10; i++ {
@@ -253,15 +253,15 @@ func TestTracePerformance(t *testing.T) {
 // TestResponseInterface ทดสอบ Response interface
 func TestResponseInterface(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	logger, _ := obsvbrutal.NewLogger(obsvbrutal.WithLevel(obsvbrutal.InfoLevel))
+	logger, _ := logbrutal.NewLogger(logbrutal.WithLevel(logbrutal.InfoLevel))
 
 	t.Run("Response Building", func(t *testing.T) {
 		router := gin.New()
-		router.Use(obsvbrutal.GinMiddleware(logger))
+		router.Use(logbrutal.GinMiddleware(logger))
 
 		// Test handler
 		router.GET("/test", func(c *gin.Context) {
-			log := obsvbrutal.GetLogFrmGin(c, "ResponseTest")
+			log := logbrutal.GetLogFrmGin(c, "ResponseTest")
 			defer log.Close()
 
 			// สร้าง response builder
@@ -286,10 +286,10 @@ func TestResponseInterface(t *testing.T) {
 
 	t.Run("Error Response", func(t *testing.T) {
 		router := gin.New()
-		router.Use(obsvbrutal.GinMiddleware(logger))
+		router.Use(logbrutal.GinMiddleware(logger))
 
 		router.GET("/error", func(c *gin.Context) {
-			log := obsvbrutal.GetLogFrmGin(c, "ErrorResponseTest")
+			log := logbrutal.GetLogFrmGin(c, "ErrorResponseTest")
 			defer log.Close()
 
 			// Error response
@@ -309,13 +309,13 @@ func TestResponseInterface(t *testing.T) {
 // Benchmark Trace interface
 func BenchmarkTraceInterface(b *testing.B) {
 	gin.SetMode(gin.TestMode)
-	logger, _ := obsvbrutal.NewLogger(obsvbrutal.WithLevel(obsvbrutal.InfoLevel))
+	logger, _ := logbrutal.NewLogger(logbrutal.WithLevel(logbrutal.InfoLevel))
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	obsvbrutal.GinMiddleware(logger)(c)
+	logbrutal.GinMiddleware(logger)(c)
 
-	log := obsvbrutal.GetLogFrmGin(c, "Benchmark")
+	log := logbrutal.GetLogFrmGin(c, "Benchmark")
 	defer log.Close()
 
 	b.Run("Simple Trace", func(b *testing.B) {

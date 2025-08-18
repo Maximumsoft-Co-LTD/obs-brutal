@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"obs-brutal/internal/core/domain"
-	pin "obs-brutal/internal/core/port/inbound"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	pin "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/inbound"
 )
 
 // MockLogger provides a mock logger for testing

@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port/outbound"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port/outbound"
 
 	"github.com/redis/go-redis/v9"
 )
