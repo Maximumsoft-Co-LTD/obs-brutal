@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -11,129 +10,97 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// minimal in-memory registries for demo
-type inMemFeatureReg struct{ m map[string]obsv.Feature }
-
-func (r *inMemFeatureReg) Register(name string, f obsv.Feature) error {
-	if r.m == nil {
-		r.m = map[string]obsv.Feature{}
-	}
-	r.m[name] = f
-	return nil
-}
-func (r *inMemFeatureReg) Get(name string) (obsv.Feature, error) {
-	if v, ok := r.m[name]; ok {
-		return v, nil
-	}
-	return nil, context.Canceled
-}
-func (r *inMemFeatureReg) List() []string {
-	a := make([]string, 0, len(r.m))
-	for k := range r.m {
-		a = append(a, k)
-	}
-	return a
-}
-func (r *inMemFeatureReg) Apply(l obsv.Logger, names []string) obsv.Logger {
-	for _, n := range names {
-		if f, ok := r.m[n]; ok {
-			l = f.Apply(l)
-		}
-	}
-	return l
-}
-
-type inMemErrReg struct{ m map[string]obsv.ErrHandler }
-
-func (r *inMemErrReg) Register(name string, h obsv.ErrHandler) error {
-	if r.m == nil {
-		r.m = map[string]obsv.ErrHandler{}
-	}
-	r.m[name] = h
-	return nil
-}
-func (r *inMemErrReg) Get(name string) (obsv.ErrHandler, error) {
-	if v, ok := r.m[name]; ok {
-		return v, nil
-	}
-	return nil, context.Canceled
-}
-func (r *inMemErrReg) List() []string {
-	a := make([]string, 0, len(r.m))
-	for k := range r.m {
-		a = append(a, k)
-	}
-	return a
-}
-func (r *inMemErrReg) Handle(l obsv.Logger, err error, cat string, det map[string]interface{}) {
-	if h, ok := r.m[cat]; ok {
-		h.Handle(l, err, det)
-	}
-}
-
-// simple service adapter
-type simpleService struct{ base obsv.Logger }
-
-func (s *simpleService) Log(ctx context.Context, level obsv.Level, msg string, fields map[string]interface{}) error {
-	log := s.base.Ctx(ctx)
-	if len(fields) > 0 {
-		log = log.Fs(fields)
-	}
-	switch level {
-	case obsv.DebugLevel:
-		log.Debug(msg)
-	case obsv.InfoLevel:
-		log.Info(msg)
-	case obsv.WarnLevel:
-		log.Warn(msg)
-	case obsv.ErrorLevel:
-		log.Error(msg)
-	case obsv.FatalLevel:
-		log.Fatal(msg)
-	}
-	return nil
-}
-func (s *simpleService) LogErr(ctx context.Context, err error, category string, details map[string]interface{}) error {
-	s.base.Ctx(ctx).Err(err).F("category", category).Fs(details).Error("error")
-	return nil
-}
-func (s *simpleService) LogStruct(ctx context.Context, err obsv.StructuredError) error {
-	return s.LogErr(ctx, fmt.Errorf("%s", err.Error()), err.Category, err.Details)
-}
-func (s *simpleService) New(cfg obsv.Config) (obsv.Logger, error) { return s.base, nil }
-func (s *simpleService) NewSimple(ctx context.Context, operationName string) (obsv.Simple, error) {
-	return nil, nil
-}
-
 func main() {
 	// 1) Logger + sinks
 	stdout := obsv.NewStdoutSink()
 	logger, _ := obsv.NewLogger(obsv.WithLevel(obsv.InfoLevel), obsv.WithSinks(stdout))
 
-	// 2) Create registries for features and error handlers
-	// feat := &inMemFeatureReg{}
-	// errReg := &inMemErrReg{}
-
-	// 3) HTTP adapter and Gin
+	// 2) สร้าง Gin engine พร้อม middleware
 	r := obsv.NewGinEngine()
 	r.Use(obsv.GinMiddleware(logger))
 
-	// demo route
+	// 3) เพิ่ม Prometheus metrics middleware (ถ้าต้องการ)
+	// metrics := obsv.NewSafePrometheus("obs-brutal-demo", "development")
+	// r.Use(metrics.HandlerFunc())
+
+	// 4) เพิ่ม metrics endpoint (ถ้าต้องการ)
+	// r.GET("/metrics", gin.WrapH(obsv.PrometheusHandler()))
+
+	// 5) demo routes
 	r.GET("/ping", func(c *gin.Context) {
+		// ดึง logger จาก Gin context
 		lg := obsv.GetLogFrmGin(c, "PingHandler")
 		defer lg.Close()
 
-		var tracer = lg.F("path", "/ping").FlatPr("ping")
+		// สร้าง trace สำหรับ operation นี้
+		tracer := lg.FlatPr("ping.operation")
 		defer tracer.End()
+
+		// เพิ่ม attributes ให้ trace
 		tracer.Add(
-			tracer.Str("path", "/ping"),
-			tracer.Str("method", "GET"),
-			tracer.Str("status", "200"),
-			tracer.Str("response", "pong"),
+			tracer.Str("endpoint", "/ping"),
+			tracer.Str("method", c.Request.Method),
+			tracer.Str("client_ip", c.ClientIP()),
+			tracer.Num("timestamp", float64(time.Now().Unix())),
 		)
-		lg.R(http.StatusOK, obsv.OptsResponse().Response(gin.H{"ok": "pong", "ts": time.Now().Unix()}))
+
+		// Log ข้อมูล request
+		lg.F("endpoint", "/ping").
+			F("method", "GET").
+			F("user_agent", c.GetHeader("User-Agent")).
+			Prt("Ping request received")
+
+		// ส่ง response
+		response := gin.H{
+			"ok":        "pong",
+			"timestamp": time.Now().Unix(),
+			"server":    "obs-brutal-demo",
+		}
+
+		// Log response และส่งกลับ
+		lg.R(http.StatusOK)
+		c.JSON(http.StatusOK, response)
 	})
 
-	fmt.Println("Server starting on :8080")
+	// Health check endpoint
+	r.GET("/health", func(c *gin.Context) {
+		lg := obsv.GetLogFrmGin(c, "HealthCheck")
+		defer lg.Close()
+
+		lg.Prt("Health check requested")
+		c.JSON(http.StatusOK, gin.H{
+			"status": "healthy",
+			"time":   time.Now().Format(time.RFC3339),
+		})
+	})
+
+	// Demo endpoint with error handling
+	r.GET("/error", func(c *gin.Context) {
+		lg := obsv.GetLogFrmGin(c, "ErrorDemo")
+		defer lg.Close()
+
+		tracer := lg.FlatPr("error.demo")
+		defer tracer.End()
+
+		// จำลอง error
+		err := fmt.Errorf("demo error for testing")
+		tracer.Err(err)
+
+		lg.Err(err)
+		lg.R(http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Demo error",
+			"code":  500,
+		})
+	})
+
+	fmt.Println("🚀 obs-brutal demo server starting...")
+	fmt.Println("📍 Endpoints:")
+	fmt.Println("   GET /ping      - Simple ping endpoint")
+	fmt.Println("   GET /health    - Health check")
+	fmt.Println("   GET /error     - Error demo")
+	fmt.Println("   GET /metrics   - Prometheus metrics")
+	fmt.Println("🌐 Server running on http://localhost:8080")
+
 	_ = r.Run(":8080")
 }
