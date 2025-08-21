@@ -50,7 +50,7 @@ docker/volumes/
 # Application specific
 app.log*
 server
-github.com/Maximumsoft-Co-LTD/obs-brutal
+obs-brutal
 *.bak
 *.backup
 
