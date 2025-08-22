@@ -674,24 +674,7 @@ func (ce *CorrelationExtractor) ExtractFromContext(ctx context.Context) map[stri
 }
 
 // ===== HTTP ERROR FOR SPAN RECORDING =====
-
-// HTTPError represents HTTP-related errors for span recording
-type HTTPError struct {
-	StatusCode int
-	Message    string
-}
-
-func (e *HTTPError) Error() string {
-	return e.Message
-}
-
-// NewHTTPError creates new HTTP error
-func NewHTTPError(statusCode int, message string) *HTTPError {
-	return &HTTPError{
-		StatusCode: statusCode,
-		Message:    message,
-	}
-}
+// Use domain.NewHTTPError in callers instead of redefining the type here.
 
 // ===== CONVENIENCE FUNCTIONS =====
 

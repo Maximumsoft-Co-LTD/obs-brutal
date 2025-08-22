@@ -406,6 +406,7 @@ type BufferedSink struct {
 	lastFlush time.Time
 	mu        sync.Mutex
 	stopCh    chan struct{}
+	wg        sync.WaitGroup
 }
 
 func (s *BufferedSink) Write(entry *domain.LogEntry) error {
@@ -432,10 +433,15 @@ func (s *BufferedSink) Write(entry *domain.LogEntry) error {
 }
 
 func (s *BufferedSink) Close() error {
-	// signal stop
+	// signal stop and wait for flusher to exit
+	s.mu.Lock()
 	if s.stopCh != nil {
 		close(s.stopCh)
 	}
+	s.mu.Unlock()
+
+	s.wg.Wait()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.flushLocked()
@@ -465,7 +471,9 @@ func (s *BufferedSink) startFlusher() {
 	}
 	s.mu.Unlock()
 
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		t := time.NewTicker(interval)
 		defer t.Stop()
 		for {
