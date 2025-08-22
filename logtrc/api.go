@@ -6,7 +6,6 @@ package logtrc
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"obs-brutal/internal/core"
@@ -160,7 +159,7 @@ func Middleware(serviceName string) gin.HandlerFunc {
 		start := time.Now()
 		log := base.
 			Ctx(c.Request.Context()).
-			RequestID(generateID()).
+			RequestID(domain.GenerateID("req")).
 			F("method", c.Request.Method).
 			F("path", c.Request.URL.Path).
 			F("ip", c.ClientIP())
@@ -228,8 +227,6 @@ func Fs(data interface{}) map[string]interface{} {
 // ===== HELPER FUNCTIONS =====
 
 // (no helpers currently)
-
-func generateID() string { return fmt.Sprintf("req_%d", time.Now().UnixNano()) }
 
 // ===== GLOBAL CONVENIENCE FUNCTIONS =====
 
