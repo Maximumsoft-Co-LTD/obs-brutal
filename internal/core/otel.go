@@ -3,13 +3,17 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"obs-brutal/internal/core/domain"
 
 	"github.com/gin-gonic/gin"
+	promcli "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -46,10 +50,19 @@ type OTelProvider struct {
 	propagator propagation.TextMapPropagator
 
 	mu sync.RWMutex
+
+	// Prometheus registry used by exporter
+	promRegistry *promcli.Registry
 }
 
 // NewOTelProvider creates full OTEL integration
 func NewOTelProvider(serviceName, version, environment, endpoint string) (*OTelProvider, error) {
+	// Sanitize endpoint and apply defaults (gRPC 4317)
+	if endpoint == "" {
+		endpoint = "localhost:4317"
+	}
+	endpoint = sanitizeGrpcEndpoint(endpoint)
+
 	// Create resource
 	res, err := resource.Merge(
 		resource.Default(),
@@ -81,7 +94,8 @@ func NewOTelProvider(serviceName, version, environment, endpoint string) (*OTelP
 	)
 
 	// Setup metric provider
-	promExporter, err := prometheus.New()
+	promReg := promcli.NewRegistry()
+	promExporter, err := prometheus.New(prometheus.WithRegisterer(promReg))
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +129,7 @@ func NewOTelProvider(serviceName, version, environment, endpoint string) (*OTelP
 		tracer:         tracer,
 		meter:          meter,
 		propagator:     propagator,
+		promRegistry:   promReg,
 	}
 
 	// Initialize metrics
@@ -123,6 +138,14 @@ func NewOTelProvider(serviceName, version, environment, endpoint string) (*OTelP
 	}
 
 	return provider, nil
+}
+
+// sanitizeGrpcEndpoint strips http(s):// schema for gRPC 4317 endpoints
+func sanitizeGrpcEndpoint(endpoint string) string {
+	endpoint = strings.TrimPrefix(endpoint, "http://")
+	endpoint = strings.TrimPrefix(endpoint, "https://")
+	return endpoint
+
 }
 
 // initMetrics initializes logging metrics
@@ -175,20 +198,23 @@ func (p *OTelProvider) ExtractTraceInfo(ctx context.Context) (traceID, spanID st
 	return
 }
 
-// RecordLogMetric records logging metrics
-func (p *OTelProvider) RecordLogMetric(level domain.Level, duration time.Duration, attributes ...attribute.KeyValue) {
+// RecordLogMetric records logging metrics using the provided context
+func (p *OTelProvider) RecordLogMetric(ctx context.Context, level domain.Level, duration time.Duration, attributes ...attribute.KeyValue) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	// Record log count
-	p.logCounter.Add(context.Background(), 1, metric.WithAttributes(
+	p.logCounter.Add(ctx, 1, metric.WithAttributes(
 		append(attributes, attribute.String("level", level.String()))...,
 	))
 
 	// Record error count if error level
 	if level >= domain.ErrorLevel {
-		p.errorCounter.Add(context.Background(), 1, metric.WithAttributes(attributes...))
+		p.errorCounter.Add(ctx, 1, metric.WithAttributes(attributes...))
 	}
 
 	// Record duration
-	p.durationHist.Record(context.Background(), duration.Seconds(), metric.WithAttributes(attributes...))
+	p.durationHist.Record(ctx, duration.Seconds(), metric.WithAttributes(attributes...))
 }
 
 // InjectHeaders injects trace context into HTTP headers
@@ -203,12 +229,11 @@ func (p *OTelProvider) ExtractHeaders(ctx context.Context, headers http.Header) 
 
 // PrometheusHandler returns Prometheus metrics handler
 func (p *OTelProvider) PrometheusHandler() http.Handler {
-	// Return Prometheus metrics endpoint
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// This would integrate with the prometheus exporter
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("# Prometheus metrics endpoint\n"))
-	})
+	// Return Prometheus metrics endpoint backed by registry
+	if p.promRegistry == nil {
+		return promhttp.Handler()
+	}
+	return promhttp.HandlerFor(p.promRegistry, promhttp.HandlerOpts{})
 }
 
 // Shutdown gracefully shuts down OTEL provider
@@ -221,31 +246,31 @@ func (p *OTelProvider) Shutdown(ctx context.Context) error {
 
 // ===== OTEL-AWARE LOGGER =====
 
-// OTelLogger combines unified logger with full OTEL integration
-type OTelLogger struct {
-	*StrategyLogger
+// OTelLogBrt combines unified logBrt with full OTEL integration
+type OTelLogBrt struct {
+	*StrategyLogBrt
 	otelProvider *OTelProvider
 }
 
-// NewOTelLogger creates logger with full OTEL integration
-func NewOTelLogger(serviceName, version, environment, endpoint string, level Level, sinks ...Sink) (*OTelLogger, error) {
+// NewOTelLogBrt creates logBrt with full OTEL integration
+func NewOTelLogBrt(serviceName, version, environment, endpoint string, level Level, sinks ...Sink) (*OTelLogBrt, error) {
 	// Setup OTEL provider
 	provider, err := NewOTelProvider(serviceName, version, environment, endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create strategy logger with async pipeline
-	strategyLogger := NewStrategyLogger(level, sinks...)
+	// Create strategy logBrt with async pipeline
+	strategyLogBrt := NewStrategyLogBrt(level, sinks...)
 
-	return &OTelLogger{
-		StrategyLogger: strategyLogger,
+	return &OTelLogBrt{
+		StrategyLogBrt: strategyLogBrt,
 		otelProvider:   provider,
 	}, nil
 }
 
 // Override log method to include OTEL metrics and tracing
-func (ol *OTelLogger) log(level domain.Level, msg string) {
+func (ol *OTelLogBrt) log(level domain.Level, msg string) {
 	start := time.Now()
 
 	// Fast level check
@@ -268,14 +293,16 @@ func (ol *OTelLogger) log(level domain.Level, msg string) {
 
 	// Extract trace info from current context if available
 	if ctx, ok := ol.fields["context"].(context.Context); ok {
-		traceID, spanID := ol.otelProvider.ExtractTraceInfo(ctx)
-		if traceID != "" {
-			entry.TraceID = traceID
-			entry.Fields["trace_id"] = traceID
-		}
-		if spanID != "" {
-			entry.SpanID = spanID
-			entry.Fields["span_id"] = spanID
+		if ol.otelProvider != nil {
+			traceID, spanID := ol.otelProvider.ExtractTraceInfo(ctx)
+			if traceID != "" {
+				entry.TraceID = traceID
+				entry.Fields["trace_id"] = traceID
+			}
+			if spanID != "" {
+				entry.SpanID = spanID
+				entry.Fields["span_id"] = spanID
+			}
 		}
 	}
 
@@ -295,12 +322,19 @@ func (ol *OTelLogger) log(level domain.Level, msg string) {
 		}
 	}
 
-	// Record OTEL metrics
+	// Record OTEL metrics (use request/operation context when available)
 	duration := time.Since(start)
-	ol.otelProvider.RecordLogMetric(level, duration,
-		attribute.String("service", ol.otelProvider.serviceName),
-		attribute.String("level", level.String()),
-	)
+	var metCtx context.Context
+	if ctx, ok := ol.fields["context"].(context.Context); ok && ctx != nil {
+		metCtx = ctx
+	} else {
+		metCtx = context.Background()
+	}
+	if ol.otelProvider != nil {
+		ol.otelProvider.RecordLogMetric(metCtx, level, duration,
+			attribute.String("service", ol.otelProvider.serviceName),
+		)
+	}
 
 	// Update counter
 	if ol.logCount != nil {
@@ -308,44 +342,135 @@ func (ol *OTelLogger) log(level domain.Level, msg string) {
 	}
 }
 
-// WithSpan creates a new span and returns logger with span context
-func (ol *OTelLogger) WithSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span, Logger) {
+// ===== OVERRIDES: ensure OTelLogBrt methods dispatch to its own log =====
+func (ol *OTelLogBrt) Debug(msg string) { ol.log(domain.DebugLevel, msg) }
+func (ol *OTelLogBrt) Info(msg string)  { ol.log(domain.InfoLevel, msg) }
+func (ol *OTelLogBrt) Warn(msg string)  { ol.log(domain.WarnLevel, msg) }
+func (ol *OTelLogBrt) Error(msg string) { ol.log(domain.ErrorLevel, msg) }
+func (ol *OTelLogBrt) Fatal(msg string) { ol.log(domain.FatalLevel, msg) }
+
+func (ol *OTelLogBrt) Debugf(format string, args ...interface{}) {
+	ol.log(domain.DebugLevel, fmt.Sprintf(format, args...))
+}
+func (ol *OTelLogBrt) Infof(format string, args ...interface{}) {
+	ol.log(domain.InfoLevel, fmt.Sprintf(format, args...))
+}
+func (ol *OTelLogBrt) Warnf(format string, args ...interface{}) {
+	ol.log(domain.WarnLevel, fmt.Sprintf(format, args...))
+}
+func (ol *OTelLogBrt) Errorf(format string, args ...interface{}) {
+	ol.log(domain.ErrorLevel, fmt.Sprintf(format, args...))
+}
+func (ol *OTelLogBrt) Fatalf(format string, args ...interface{}) {
+	ol.log(domain.FatalLevel, fmt.Sprintf(format, args...))
+}
+
+// ===== DERIVED BUILDER OVERRIDES: preserve OTelLogBrt type =====
+
+// clone creates an OTelLogBrt preserving provider and strategy chain
+func (ol *OTelLogBrt) clone() *OTelLogBrt {
+	base := ol.StrategyLogBrt.clone()
+	return &OTelLogBrt{
+		StrategyLogBrt: base,
+		otelProvider:   ol.otelProvider,
+	}
+}
+
+// F adds a field and returns OTelLogBrt clone
+func (ol *OTelLogBrt) F(key string, value interface{}) LogBrt {
+	clone := ol.clone()
+	clone.fields[key] = value
+	return clone
+}
+
+// Fs adds multiple fields and returns OTelLogBrt clone
+func (ol *OTelLogBrt) Fs(fields map[string]interface{}) LogBrt {
+	if len(fields) == 0 {
+		return ol
+	}
+	clone := ol.clone()
+	for k, v := range fields {
+		clone.fields[k] = v
+	}
+	return clone
+}
+
+// Ctx attaches context and ID fields, preserving type
+func (ol *OTelLogBrt) Ctx(ctx context.Context) LogBrt {
+	if ctx == nil {
+		return ol
+	}
+	clone := ol.clone()
+	clone.fields["context"] = ctx
+	if traceID := extractFromContext(ctx, "trace_id"); traceID != "" {
+		clone.fields["trace_id"] = traceID
+	}
+	if userID := extractFromContext(ctx, "user_id"); userID != "" {
+		clone.fields["user_id"] = userID
+	}
+	if requestID := extractFromContext(ctx, "request_id"); requestID != "" {
+		clone.fields["request_id"] = requestID
+	}
+	return clone
+}
+
+func (ol *OTelLogBrt) TraceID(id string) LogBrt   { return ol.F("trace_id", id) }
+func (ol *OTelLogBrt) UserID(id string) LogBrt    { return ol.F("user_id", id) }
+func (ol *OTelLogBrt) RequestID(id string) LogBrt { return ol.F("request_id", id) }
+
+// WithError preserves type
+func (ol *OTelLogBrt) WithError(err error) LogBrt {
+	if err == nil {
+		return ol
+	}
+	return ol.F("error", err.Error())
+}
+
+// WithSpan creates a new span and returns logBrt with span context
+func (ol *OTelLogBrt) WithSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span, LogBrt) {
 	spanCtx, span := ol.otelProvider.StartSpan(ctx, name, opts...)
 
-	// Create logger with span context
-	logger := ol.Ctx(spanCtx)
+	// Create logBrt with span context
+	logBrt := ol.Ctx(spanCtx)
 
-	return spanCtx, span, logger
+	return spanCtx, span, logBrt
 }
 
 // GetOTelProvider returns the OTEL provider for advanced usage
-func (ol *OTelLogger) GetOTelProvider() *OTelProvider {
+func (ol *OTelLogBrt) GetOTelProvider() *OTelProvider {
 	return ol.otelProvider
 }
 
 // ===== GIN OTEL MIDDLEWARE =====
 
 // OTelGinMiddleware creates Gin middleware with full OTEL integration
-func OTelGinMiddleware(otelLogger *OTelLogger) gin.HandlerFunc {
+func OTelGinMiddleware(otelLogBrt *OTelLogBrt) gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
 		start := time.Now()
 
 		// Extract or create trace context
-		ctx := otelLogger.otelProvider.ExtractHeaders(c.Request.Context(), c.Request.Header)
+		ctx := otelLogBrt.otelProvider.ExtractHeaders(c.Request.Context(), c.Request.Header)
 
-		// Start span for request
-		spanCtx, span := otelLogger.otelProvider.StartSpan(ctx, c.Request.URL.Path,
+		// Start span for request with robust scheme detection
+		scheme := "http"
+		if c.Request.TLS != nil {
+			scheme = "https"
+		} else if proto := c.Request.Header.Get("X-Forwarded-Proto"); proto != "" {
+			scheme = proto
+		}
+		spanCtx, span := otelLogBrt.otelProvider.StartSpan(ctx, c.Request.URL.Path,
 			trace.WithAttributes(
-				semconv.HTTPMethod(c.Request.Method),
-				semconv.HTTPRoute(c.FullPath()),
-				semconv.HTTPScheme(c.Request.URL.Scheme),
-				semconv.HTTPTarget(c.Request.URL.Path),
+				attribute.String("http.request.method", c.Request.Method),
+				attribute.String("url.scheme", scheme),
+				attribute.String("url.path", c.Request.URL.Path),
+				attribute.String("url.query", c.Request.URL.RawQuery),
+				attribute.String("http.route", c.FullPath()),
 			),
 		)
 		defer span.End()
 
-		// Create request logger with full context
-		requestLogger := otelLogger.
+		// Create request logBrt with full context
+		requestLogBrt := otelLogBrt.
 			Ctx(spanCtx).
 			RequestID(generateRequestID()).
 			F("method", c.Request.Method).
@@ -354,7 +479,7 @@ func OTelGinMiddleware(otelLogger *OTelLogger) gin.HandlerFunc {
 			F("user_agent", c.Request.UserAgent())
 
 		// Store in Gin context
-		c.Set("otel_logger", requestLogger)
+		c.Set("otel_log", requestLogBrt)
 		c.Set("span", span)
 		c.Request = c.Request.WithContext(spanCtx)
 
@@ -367,7 +492,7 @@ func OTelGinMiddleware(otelLogger *OTelLogger) gin.HandlerFunc {
 
 		// Add span attributes
 		span.SetAttributes(
-			semconv.HTTPStatusCode(status),
+			attribute.Int("http.status_code", status),
 			attribute.Int64("http.response.size", int64(c.Writer.Size())),
 			attribute.Float64("duration_ms", float64(duration.Milliseconds())),
 		)
@@ -383,7 +508,7 @@ func OTelGinMiddleware(otelLogger *OTelLogger) gin.HandlerFunc {
 		}
 
 		// Log request completion
-		requestLogger.
+		requestLogBrt.
 			F("status", status).
 			F("duration_ms", duration.Milliseconds()).
 			F("response_size", c.Writer.Size()).
@@ -391,22 +516,23 @@ func OTelGinMiddleware(otelLogger *OTelLogger) gin.HandlerFunc {
 	})
 }
 
-// GetOTelLog extracts OTEL-aware logger from Gin context
-func GetOTelLog(c *gin.Context) Logger {
-	if logger, exists := c.Get("otel_logger"); exists {
-		if log, ok := logger.(Logger); ok {
+// GetOTelLog extracts OTEL-aware logBrt from Gin context
+func GetOTelLog(c *gin.Context) LogBrt {
+	if logBrt, exists := c.Get("otel_log"); exists {
+		if log, ok := logBrt.(LogBrt); ok {
 			return log
 		}
 	}
 
-	// Fallback to regular logger
-	return NewUnifiedLogger(INFO)
+	// Fallback to regular logBrt
+	return NewUnifiedLogBrt(INFO)
 }
 
 // ===== OTEL SINKS =====
 
 // OTLPSink sends logs directly to OTLP collector
 type OTLPSink struct {
+	SinkBase
 	endpoint string
 	client   *http.Client
 	mu       sync.Mutex
@@ -427,10 +553,7 @@ func (s *OTLPSink) Write(entry *domain.LogEntry) error {
 	return nil
 }
 
-func (s *OTLPSink) Close() error                           { return nil }
-func (s *OTLPSink) Name() string                           { return "otlp" }
-func (s *OTLPSink) Health() error                          { return nil }
-func (s *OTLPSink) Configure(map[string]interface{}) error { return nil }
+func (s *OTLPSink) Name() string { return "otlp" }
 
 // ===== AMQP INTEGRATION =====
 

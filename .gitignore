@@ -45,7 +45,8 @@ build/
 
 # Docker volumes
 docker/volumes/
-*.yml
+# Avoid ignoring all YAML files. Keep docker/generated-only YAMLs ignored if needed.
+# *.yml
 
 # Application specific
 app.log*

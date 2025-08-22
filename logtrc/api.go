@@ -1,4 +1,7 @@
-// Package logtrc provides the simplest, fastest, and most efficient logging API
+// for applications with optional observability integrations (OTEL, Prometheus).
+//
+// It exposes a small, stable public surface that wraps the internal/core package
+// with sensible defaults and clean, fluent methods.
 package logtrc
 
 import (
@@ -25,160 +28,172 @@ const (
 	FATAL Level = domain.FatalLevel
 )
 
-// Logger is the main interface - simplified and powerful
-type Logger = core.Logger
+// LogBrt is the main interface for structured logging with fluent APIs.
+type LogBrt = core.LogBrt
 
-// LogTrc combines logging + tracing + response building
+// Log is a short alias for LogBrt (recommended concise type name).
+type Log = core.LogBrt
+
+// Sink is the sink interface exposed for output targets.
+type Sink = core.Sink
+
+// LogTrc combines logging + tracing + response building for web apps.
+// Obtain it via GetLogTrcFrmGin and close with .Close() when done.
 type LogTrc = core.LogTrc
 
-// Tracer for hierarchical tracing
+// Tracer represents hierarchical traces. Create via LogTrc.FlatPr/ChildPr.
 type Tracer = core.Tracer
 
 // Response builder types
 type (
+	// SimpleResponseBuilder builds and sends JSON responses with auto-logging.
 	SimpleResponseBuilder = core.SimpleResponseBuilder
-	ResponseOptions       = core.ResponseOptions
-	SimpleResponseOption  = core.SimpleResponseOption
 )
 
-// Simple is the ultra-easy interface for web apps
-type Simple interface {
-	// Super simple logging
-	Log(msg string)
-	Logf(format string, args ...interface{})
+// OTelLogBrt is the OpenTelemetry-enabled logBrt type.
+type OTelLogBrt = core.OTelLogBrt
 
-	// With single field
-	With(key string, value interface{}) Simple
+// AsyncLogBrt exposes async logBrt type.
+type AsyncLogBrt = core.AsyncLogBrt
 
-	// With error
-	Error(err error) Simple
+// SecurityLogBrt exposes enterprise security logBrt type.
+type SecurityLogBrt = core.SecurityLogBrt
 
-	// Close when done
-	Close()
+// NewOTelLogBrt creates an OTEL-enabled logBrt quickly from logtrc.
+//
+// Example:
+//
+//	l, err := logtrc.NewOTelLogBrt(
+//	    logtrc.SrvName("svc"), logtrc.Version("1.0.0"), logtrc.Env("prod"),
+//	    "jaeger:4317", logtrc.INFO,
+//	)
+//	if err != nil { panic(err) }
+func NewOTelLogBrt(serviceName, version, environment, endpoint string, level Level, sinks ...core.Sink) (*OTelLogBrt, error) {
+	return core.NewOTelLogBrt(serviceName, version, environment, endpoint, level, sinks...)
+}
+
+// NewAsyncLogBrt creates logBrt with async pipeline.
+func NewAsyncLogBrt(level Level, sinks ...Sink) *AsyncLogBrt {
+	return core.NewAsyncLogBrt(level, sinks...)
+}
+
+// NewSecurityLogBrt creates OTEL logBrt with security features enabled.
+func NewSecurityLogBrt(serviceName, version, environment, endpoint string, level Level, sinks ...Sink) (*SecurityLogBrt, error) {
+	return core.NewSecurityLogBrt(serviceName, version, environment, endpoint, level, sinks...)
+}
+
+// Sinks
+func NewFastStdoutSink() Sink  { return core.NewFastStdoutSink() }
+func NewOptimalFileSink() Sink { return core.NewOptimalFileSink() }
+func NewJSONSink() Sink        { return core.NewJSONSink() }
+func NewBufferedSink() Sink    { return core.NewBufferedSink() }
+func NewBufferedSinkWith(size int, timeout time.Duration) Sink {
+	return core.NewBufferedSinkWith(size, timeout)
 }
 
 // ===== UNIFIED SMART FACTORY =====
 
-// New creates smart logger with options (no environment variables!)
-// Usage examples:
+// New creates a smart logBrt with options (no environment variables).
+// Example:
 //
-//	log := logtrc.New()                                    // Simple mode (762k+ logs/sec)
-//	log := logtrc.New(Masking(true))                       // With PII masking
-//	log := logtrc.New(OTel("jaeger:14268"), Masking(true)) // Full enterprise
-func New(opts ...ConfigOption) Logger {
-	return core.NewSmartLoggerWithOptions(opts...)
+//	log := logtrc.New(logtrc.SrvName("svc"), logtrc.Masking(true))
+func New(opts ...ConfigOption) LogBrt {
+	return core.NewSmartLogBrtWithOptions(opts...)
 }
 
-// NewDefault creates logger with sensible defaults
-func NewDefault() Logger {
-	return New()
-}
+// NewDefault creates logBrt with sensible defaults.
+func NewDefault() LogBrt { return New() }
 
 // ===== OPTIONS (Replace Environment Variables) =====
 
-// Configuration options
+// Public option helpers for clean configuration
 var (
-	SrvName    = core.SrvName    // Service name
-	Version    = core.Version    // Service version
-	Env        = core.Env        // Environment
-	OTel       = core.OTel       // OTEL endpoint
-	Prometheus = core.Prometheus // Prometheus endpoint
-	Loki       = core.Loki       // Loki endpoint
-	Promtail   = core.Promtail   // Promtail endpoint
-	Masking    = core.Masking    // Enable PII masking
-	Async      = core.Async      // Enable async pipeline
-	LogLevel   = core.LogLevel   // Set log level
+	SrvName    = core.SrvName
+	Version    = core.Version
+	Env        = core.Env
+	OTel       = core.OTel
+	Prometheus = core.Prometheus
+	Loki       = core.Loki
+	Promtail   = core.Promtail
+	Masking    = core.Masking
+	Async      = core.Async
+	LogLevel   = core.LogLevel
 )
 
-// Response options
+// Response options factory
 var (
-	Opts = core.NewResponseOpts() // Response options factory
+	Opts = core.NewResponseOpts()
 )
 
-// ConfigOption type alias
+// ConfigOption configures the logBrt and integrations.
 type ConfigOption = core.ConfigOption
 
 // ===== LOGTRC INTEGRATION =====
 
-// GetLogTrcFrmGin gets LogTrc from Gin context with options
-// Automatically binds TraceID, SpanID and connects to observability stack
-// Usage: ltrace := logtrc.GetLogTrcFrmGin(c, "GetUsers", OTel("jaeger:14268"), Masking(true))
+// GetLogTrcFrmGin gets LogTrc from Gin context with options.
+// It auto-binds TraceID/SpanID and connects to the observability stack.
 func GetLogTrcFrmGin(c *gin.Context, operation string, opts ...ConfigOption) LogTrc {
 	return core.NewSmartLogTrc(c, operation, opts...)
 }
 
-// OptsResponse creates response options factory
-func OptsResponse() *ResponseOptions {
-	return core.OptsResponse()
-}
+// OptsResponse creates response options factory for chainable helpers.
+// Deprecated: use Opts (NewResponseOpts) instead.
+func OptsResponse() *core.ResponseOpts { return core.NewResponseOpts() }
 
-// GlobalDetector provides access to capability detection
+// GlobalDetector exposes capability detection (optional usage).
 var GlobalDetector = core.GlobalDetector
 
 // ===== BACKWARD COMPATIBILITY (Optional Modes) =====
 
-// NewWeb creates logger optimized for web applications
-func NewWeb(serviceName string) Logger {
-	logger := New()
-	return logger.F("service", serviceName)
-}
-
-// NewSimple creates the simplest possible logger for basic usage
-func NewSimple(ctx context.Context, operation string) Simple {
-	logger := New().
-		Ctx(ctx).
-		F("operation", operation)
-
-	return &simpleLogger{logger: logger}
+// NewWeb creates logBrt optimized for web applications (adds service field).
+func NewWeb(serviceName string) LogBrt {
+	logBrt := New()
+	return logBrt.F("service", serviceName)
 }
 
 // ===== GIN INTEGRATION (SIMPLIFIED) =====
 
-// Middleware creates Gin middleware (simplified)
+// Middleware creates Gin middleware that propagates context and attaches logBrt.
 func Middleware(serviceName string) gin.HandlerFunc {
-	logger := NewWeb(serviceName)
+	base := NewWeb(serviceName)
 	return gin.HandlerFunc(func(c *gin.Context) {
 		start := time.Now()
-
-		// Auto-add request context
-		log := logger.
+		log := base.
+			Ctx(c.Request.Context()).
 			RequestID(generateID()).
 			F("method", c.Request.Method).
 			F("path", c.Request.URL.Path).
 			F("ip", c.ClientIP())
 
-		// Store in context
 		c.Set("log", log)
 		c.Next()
 
-		// Log completion
 		log.F("status", c.Writer.Status()).
 			F("duration_ms", time.Since(start).Milliseconds()).
 			Info("Request completed")
 	})
 }
 
-// GetLog extracts logger from Gin context (simplified)
-func GetLog(c *gin.Context) Logger {
-	if logger, exists := c.Get("log"); exists {
-		if log, ok := logger.(Logger); ok {
+// GetLog extracts logBrt from Gin context (simplified)
+func GetLog(c *gin.Context) LogBrt {
+	if logBrt, exists := c.Get("log"); exists {
+		if log, ok := logBrt.(LogBrt); ok {
 			return log
 		}
 	}
 	return NewDefault()
 }
 
-// GetSimple gets simple logger from Gin context (backward compatibility)
-func GetSimple(c *gin.Context, operation string) Simple {
-	logger := GetLog(c).F("operation", operation)
-	return &simpleLogger{logger: logger}
+// GetOTelLog extracts OTEL-aware logBrt from Gin context.
+func GetOTelLog(c *gin.Context) LogBrt {
+	return core.GetOTelLog(c)
 }
 
 // ===== ADVANCED MIDDLEWARE =====
 
-// OTelMiddleware creates Gin middleware with full OTEL integration
-func OTelMiddleware(otelLogger *core.OTelLogger) gin.HandlerFunc {
-	return core.OTelGinMiddleware(otelLogger)
+// OTelMiddleware creates Gin middleware with full OTEL integration.
+func OTelMiddleware(otelLogBrt *core.OTelLogBrt) gin.HandlerFunc {
+	return core.OTelGinMiddleware(otelLogBrt)
 }
 
 // ===== STRATEGY UTILITIES =====
@@ -199,9 +214,7 @@ func CreateAdaptiveSampler(baseRate, minRate, maxRate float64) core.SamplerStrat
 }
 
 // CreatePIIMasker creates PII masking strategy
-func CreatePIIMasker() core.MaskingStrategy {
-	return core.NewPIIMasker()
-}
+func CreatePIIMasker() core.MaskingStrategy { return core.NewPIIMasker() }
 
 // ===== CORRELATION UTILITIES =====
 
@@ -212,82 +225,29 @@ func Fs(data interface{}) map[string]interface{} {
 	return extractor.Fields(data)
 }
 
-// ===== IMPLEMENTATIONS =====
-
-// simpleLogger implements Simple interface
-type simpleLogger struct {
-	logger Logger
-}
-
-func (s *simpleLogger) Log(msg string) {
-	s.logger.Info(msg)
-}
-
-func (s *simpleLogger) Logf(format string, args ...interface{}) {
-	s.logger.Infof(format, args...)
-}
-
-func (s *simpleLogger) With(key string, value interface{}) Simple {
-	return &simpleLogger{logger: s.logger.F(key, value)}
-}
-
-func (s *simpleLogger) Error(err error) Simple {
-	return &simpleLogger{logger: s.logger.WithError(err)}
-}
-
-func (s *simpleLogger) Close() {
-	// Nothing to do - logger handles cleanup
-}
-
 // ===== HELPER FUNCTIONS =====
 
-// buildOptimalSinks creates the best sinks for given outputs
-func buildOptimalSinks(outputs ...string) []core.Sink {
-	if len(outputs) == 0 {
-		outputs = []string{"stdout"}
-	}
+// (no helpers currently)
 
-	var sinks []core.Sink
-	for _, output := range outputs {
-		switch output {
-		case "stdout", "console":
-			sinks = append(sinks, core.NewFastStdoutSink())
-		case "file":
-			// Auto-configure optimal file sink
-			sinks = append(sinks, core.NewOptimalFileSink())
-		case "buffer":
-			// Auto-configure optimal buffered sink
-			sinks = append(sinks, core.NewBufferedSink())
-		}
-	}
-
-	return sinks
-}
-
-// generateID creates simple request ID
-func generateID() string {
-	return fmt.Sprintf("req_%d", time.Now().UnixNano())
-}
+func generateID() string { return fmt.Sprintf("req_%d", time.Now().UnixNano()) }
 
 // ===== GLOBAL CONVENIENCE FUNCTIONS =====
 
-var defaultLogger = NewDefault()
+var defaultLogBrt = NewDefault()
 
-// Quick global logging functions
-func Debug(msg string) { defaultLogger.Debug(msg) }
-func Info(msg string)  { defaultLogger.Info(msg) }
-func Warn(msg string)  { defaultLogger.Warn(msg) }
-func Error(msg string) { defaultLogger.Error(msg) }
-func Fatal(msg string) { defaultLogger.Fatal(msg) }
+func Debug(msg string) { defaultLogBrt.Debug(msg) }
+func Info(msg string)  { defaultLogBrt.Info(msg) }
+func Warn(msg string)  { defaultLogBrt.Warn(msg) }
+func Error(msg string) { defaultLogBrt.Error(msg) }
+func Fatal(msg string) { defaultLogBrt.Fatal(msg) }
 
-func Debugf(format string, args ...interface{}) { defaultLogger.Debugf(format, args...) }
-func Infof(format string, args ...interface{})  { defaultLogger.Infof(format, args...) }
-func Warnf(format string, args ...interface{})  { defaultLogger.Warnf(format, args...) }
-func Errorf(format string, args ...interface{}) { defaultLogger.Errorf(format, args...) }
-func Fatalf(format string, args ...interface{}) { defaultLogger.Fatalf(format, args...) }
+func Debugf(format string, args ...interface{}) { defaultLogBrt.Debugf(format, args...) }
+func Infof(format string, args ...interface{})  { defaultLogBrt.Infof(format, args...) }
+func Warnf(format string, args ...interface{})  { defaultLogBrt.Warnf(format, args...) }
+func Errorf(format string, args ...interface{}) { defaultLogBrt.Errorf(format, args...) }
+func Fatalf(format string, args ...interface{}) { defaultLogBrt.Fatalf(format, args...) }
 
-// With fields
-func With(key string, value interface{}) Logger       { return defaultLogger.F(key, value) }
-func WithFields(fields map[string]interface{}) Logger { return defaultLogger.Fs(fields) }
-func WithError(err error) Logger                      { return defaultLogger.WithError(err) }
-func WithContext(ctx context.Context) Logger          { return defaultLogger.Ctx(ctx) }
+func With(key string, value interface{}) LogBrt       { return defaultLogBrt.F(key, value) }
+func WithFields(fields map[string]interface{}) LogBrt { return defaultLogBrt.Fs(fields) }
+func WithError(err error) LogBrt                      { return defaultLogBrt.WithError(err) }
+func WithContext(ctx context.Context) LogBrt          { return defaultLogBrt.Ctx(ctx) }

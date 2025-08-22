@@ -94,9 +94,15 @@ func (pm *PIIMasker) addEnterprisePatterns() {
 			Replacement: "x-xxxx-xxxxx-xx-x",
 			Severity:    PIIHigh,
 		},
+		"thai_id_compact": {
+			Name:        "Thai National ID (compact)",
+			Pattern:     regexp.MustCompile(`\b\d{13}\b`),
+			Replacement: "xxxxxxxxxxxxx",
+			Severity:    PIIHigh,
+		},
 		"thai_phone": {
 			Name:        "Thai Phone Number",
-			Pattern:     regexp.MustCompile(`(\+66|0)[0-9-\s]{8,10}`),
+			Pattern:     regexp.MustCompile(`(?:\+66|0)[\s-]?\d{2}[\s-]?\d{3}[\s-]?\d{4}\b`),
 			Replacement: "xxx-xxx-xxxx",
 			Severity:    PIIMedium,
 		},
@@ -194,7 +200,7 @@ func (pm *PIIMasker) maskValue(fieldName string, value interface{}) interface{} 
 		return pm.maskStringPatterns(str)
 	}
 
-	// Check struct tags if it's a struct
+	// Check struct tags if it's a struct (supports `pii` and `log`)
 	if pm.isStructWithTags(value) {
 		return pm.maskStructFields(value)
 	}
@@ -301,6 +307,17 @@ func (pm *PIIMasker) maskStructFields(value interface{}) interface{} {
 		field := rt.Field(i)
 		fieldValue := rv.Field(i)
 
+		// Check pii tag (email/phone/password/...) first
+		if pii := field.Tag.Get("pii"); pii != "" {
+			fieldName := field.Name
+			if jsonTag := field.Tag.Get("json"); jsonTag != "" {
+				fieldName = strings.Split(jsonTag, ",")[0]
+			}
+			masked := pm.applyPIITag(pii, fieldValue.Interface())
+			fields[fieldName] = masked
+			continue
+		}
+
 		// Check log tag
 		if logTag := field.Tag.Get("log"); logTag != "" {
 			if logTag == "-" {
@@ -326,6 +343,24 @@ func (pm *PIIMasker) maskStructFields(value interface{}) interface{} {
 	}
 
 	return fields
+}
+
+// applyPIITag applies masking per pii tag type
+func (pm *PIIMasker) applyPIITag(pii string, val interface{}) interface{} {
+	str, ok := val.(string)
+	if !ok {
+		return val
+	}
+	switch strings.ToLower(pii) {
+	case "email":
+		return pm.maskStringPatterns(str)
+	case "phone":
+		return pm.maskStringPatterns(str)
+	case "password":
+		return strings.Repeat("*", len(str))
+	default:
+		return pm.maskPartially(str)
+	}
 }
 
 // applyTagMasking applies masking based on struct tag options
@@ -613,23 +648,23 @@ func (acm *AccessControlManager) isPIIField(fieldName string) bool {
 	return false
 }
 
-// ===== ENTERPRISE LOGGER =====
+// ===== SECURITY LogBrt =====
 
-// EnterpriseLogger combines all enterprise security features
-type EnterpriseLogger struct {
-	*OTelLogger
+// SecurityLogBrt combines enterprise security features on top of OTEL LogBrt
+type SecurityLogBrt struct {
+	*OTelLogBrt
 	piiMasker       *PIIMasker
 	accessControl   *AccessControlManager
 	auditTrail      *AuditTrail
 	securityEnabled bool
 }
 
-// NewEnterpriseLogger creates logger with full enterprise security
-func NewEnterpriseLogger(serviceName, version, environment, endpoint string,
-	level Level, sinks ...Sink) (*EnterpriseLogger, error) {
+// NewSecurityLogBrt creates LogBrt with full enterprise security
+func NewSecurityLogBrt(serviceName, version, environment, endpoint string,
+	level Level, sinks ...Sink) (*SecurityLogBrt, error) {
 
-	// Create OTEL logger
-	otelLogger, err := NewOTelLogger(serviceName, version, environment, endpoint, level, sinks...)
+	// Create OTEL LogBrt
+	otelLogBrt, err := NewOTelLogBrt(serviceName, version, environment, endpoint, level, sinks...)
 	if err != nil {
 		return nil, err
 	}
@@ -640,10 +675,10 @@ func NewEnterpriseLogger(serviceName, version, environment, endpoint string,
 	auditTrail := NewAuditTrail(10000)
 
 	// Add enterprise masking strategy
-	otelLogger.AddMasker(piiMasker)
+	otelLogBrt.AddMasker(piiMasker)
 
-	return &EnterpriseLogger{
-		OTelLogger:      otelLogger,
+	return &SecurityLogBrt{
+		OTelLogBrt:      otelLogBrt,
 		piiMasker:       piiMasker,
 		accessControl:   accessControl,
 		auditTrail:      auditTrail,
@@ -652,7 +687,7 @@ func NewEnterpriseLogger(serviceName, version, environment, endpoint string,
 }
 
 // LogWithSecurity logs with full enterprise security checks
-func (el *EnterpriseLogger) LogWithSecurity(level domain.Level, msg string,
+func (el *SecurityLogBrt) LogWithSecurity(level domain.Level, msg string,
 	userID, userRole string, isAuthenticated bool) {
 
 	if !el.securityEnabled {
@@ -673,34 +708,42 @@ func (el *EnterpriseLogger) LogWithSecurity(level domain.Level, msg string,
 		el.auditTrail, userID, traceID, spanID,
 	)
 
-	// Create logger with filtered fields
-	secureLogger := &EnterpriseLogger{
-		OTelLogger:      el.OTelLogger,
+	// Create LogBrt with filtered fields
+	secureLogBrt := &SecurityLogBrt{
+		OTelLogBrt:      el.OTelLogBrt,
 		piiMasker:       el.piiMasker,
 		accessControl:   el.accessControl,
 		auditTrail:      el.auditTrail,
 		securityEnabled: el.securityEnabled,
 	}
 
-	// Update fields
-	// Go 1.25: Efficient map operations
-	clear(secureLogger.fields)
+	// Update fields on a cloned instance to avoid mutating the original logger state
+	secureLogBrt = secureLogBrt.clone()
 	for k, v := range filteredFields {
-		secureLogger.fields[k] = v
+		secureLogBrt.fields[k] = v
 	}
 
 	// Log with security
-	secureLogger.log(level, msg)
+	secureLogBrt.log(level, msg)
 }
 
 // GetAuditTrail returns audit trail for compliance
-func (el *EnterpriseLogger) GetAuditTrail(limit int) []AuditEntry {
+func (el *SecurityLogBrt) GetAuditTrail(limit int) []AuditEntry {
 	return el.auditTrail.GetAuditTrail(limit)
 }
 
 // EnableSecurity enables/disables security features
-func (el *EnterpriseLogger) EnableSecurity(enabled bool) {
+func (el *SecurityLogBrt) EnableSecurity(enabled bool) {
 	el.securityEnabled = enabled
+}
+
+// Backward compatibility alias
+type EnterpriseLogBrt = SecurityLogBrt
+
+func NewEnterpriseLogBrt(serviceName, version, environment, endpoint string,
+	level Level, sinks ...Sink) (*EnterpriseLogBrt, error) {
+	sl, err := NewSecurityLogBrt(serviceName, version, environment, endpoint, level, sinks...)
+	return (*EnterpriseLogBrt)(sl), err
 }
 
 func (pm *PIIMasker) Name() string { return "enterprise_pii_masker" }
@@ -710,4 +753,64 @@ func (pm *PIIMasker) Configure(config map[string]interface{}) error {
 		pm.enabled = enabled
 	}
 	return nil
+}
+
+// ===== DERIVED BUILDER OVERRIDES: preserve SecurityLogBrt type =====
+
+// clone creates SecurityLogBrt preserving security components
+func (el *SecurityLogBrt) clone() *SecurityLogBrt {
+	base := el.OTelLogBrt.clone()
+	return &SecurityLogBrt{
+		OTelLogBrt:      base,
+		piiMasker:       el.piiMasker,
+		accessControl:   el.accessControl,
+		auditTrail:      el.auditTrail,
+		securityEnabled: el.securityEnabled,
+	}
+}
+
+func (el *SecurityLogBrt) F(key string, value interface{}) LogBrt {
+	clone := el.clone()
+	clone.fields[key] = value
+	return clone
+}
+
+func (el *SecurityLogBrt) Fs(fields map[string]interface{}) LogBrt {
+	if len(fields) == 0 {
+		return el
+	}
+	clone := el.clone()
+	for k, v := range fields {
+		clone.fields[k] = v
+	}
+	return clone
+}
+
+func (el *SecurityLogBrt) Ctx(ctx context.Context) LogBrt {
+	if ctx == nil {
+		return el
+	}
+	clone := el.clone()
+	clone.fields["context"] = ctx
+	if traceID := extractFromContext(ctx, "trace_id"); traceID != "" {
+		clone.fields["trace_id"] = traceID
+	}
+	if userID := extractFromContext(ctx, "user_id"); userID != "" {
+		clone.fields["user_id"] = userID
+	}
+	if requestID := extractFromContext(ctx, "request_id"); requestID != "" {
+		clone.fields["request_id"] = requestID
+	}
+	return clone
+}
+
+func (el *SecurityLogBrt) TraceID(id string) LogBrt   { return el.F("trace_id", id) }
+func (el *SecurityLogBrt) UserID(id string) LogBrt    { return el.F("user_id", id) }
+func (el *SecurityLogBrt) RequestID(id string) LogBrt { return el.F("request_id", id) }
+
+func (el *SecurityLogBrt) WithError(err error) LogBrt {
+	if err == nil {
+		return el
+	}
+	return el.F("error", err.Error())
 }
