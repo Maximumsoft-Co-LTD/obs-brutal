@@ -2,6 +2,9 @@
 package core
 
 import (
+	"context"
+	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"sync"
@@ -148,17 +151,30 @@ type RateSampler struct {
 }
 
 func NewRateSampler(rate float64) *RateSampler {
-	return &RateSampler{
-		rate:     rate,
-		interval: uint64(1.0 / rate),
+	// Clamp and compute interval safely
+	if rate >= 1.0 {
+		return &RateSampler{rate: 1.0, interval: 1}
 	}
+	if rate <= 0.0 {
+		return &RateSampler{rate: 0.0, interval: 0}
+	}
+	interval := uint64(math.Ceil(1.0 / rate))
+	if interval == 0 {
+		interval = 1
+	}
+	return &RateSampler{rate: rate, interval: interval}
 }
 
 func (s *RateSampler) ShouldSample(entry *domain.LogEntry) bool {
+	if s.rate <= 0.0 {
+		return false
+	}
 	if s.rate >= 1.0 {
 		return true
 	}
-
+	if s.interval == 0 {
+		return false
+	}
 	count := s.counter.Add(1)
 	return count%s.interval == 0
 }
@@ -167,8 +183,21 @@ func (s *RateSampler) Name() string { return "rate_sampler" }
 
 func (s *RateSampler) Configure(config map[string]interface{}) error {
 	if rate, ok := config["rate"].(float64); ok {
-		s.rate = rate
-		s.interval = uint64(1.0 / rate)
+		// Clamp and compute safely
+		if rate >= 1.0 {
+			s.rate = 1.0
+			s.interval = 1
+		} else if rate <= 0.0 {
+			s.rate = 0.0
+			s.interval = 0
+		} else {
+			s.rate = rate
+			interval := uint64(math.Ceil(1.0 / rate))
+			if interval == 0 {
+				interval = 1
+			}
+			s.interval = interval
+		}
 	}
 	return nil
 }
@@ -212,9 +241,18 @@ func (s *AdaptiveSampler) ShouldSample(entry *domain.LogEntry) bool {
 
 	// Sample based on current rate
 	currentRate := float64(s.currentRate.Load()) / 1000000
-	s.logCount.Add(1)
-
-	return s.logCount.Load()%uint64(1.0/currentRate) == 0
+	if currentRate <= 0.0 {
+		return false
+	}
+	if currentRate >= 1.0 {
+		return true
+	}
+	interval := uint64(math.Ceil(1.0 / currentRate))
+	if interval == 0 {
+		interval = 1
+	}
+	count := s.logCount.Add(1)
+	return count%interval == 0
 }
 
 func (s *AdaptiveSampler) adjustSamplingRate() {
@@ -495,17 +533,17 @@ func (sm *StrategyManager) RemoveStrategy(strategyType, name string) {
 	}
 }
 
-// ===== ENHANCED LOGGER WITH STRATEGIES =====
+// ===== ENHANCED LogBrt WITH STRATEGIES =====
 
-// StrategyLogger combines unified logger with strategies
-type StrategyLogger struct {
-	*UnifiedLogger
+// StrategyLogBrt combines unified LogBrt with strategies
+type StrategyLogBrt struct {
+	*UnifiedLogBrt
 	strategies *StrategyManager
 	async      *AsyncPipeline
 }
 
-// NewStrategyLogger creates logger with strategy support
-func NewStrategyLogger(level Level, sinks ...Sink) *StrategyLogger {
+// NewStrategyLogBrt creates LogBrt with strategy support
+func NewStrategyLogBrt(level Level, sinks ...Sink) *StrategyLogBrt {
 	strategies := NewStrategyManager()
 
 	// Add default strategies
@@ -515,34 +553,24 @@ func NewStrategyLogger(level Level, sinks ...Sink) *StrategyLogger {
 	// Create async pipeline for maximum performance
 	async := NewAsyncPipeline(1000, 4, 100*time.Millisecond, sinks...)
 
-	baseLogger := NewUnifiedLogger(level)
+	baseLogBrt := NewUnifiedLogBrt(level)
 
-	return &StrategyLogger{
-		UnifiedLogger: baseLogger,
+	return &StrategyLogBrt{
+		UnifiedLogBrt: baseLogBrt,
 		strategies:    strategies,
 		async:         async,
 	}
 }
 
 // Override log method to apply strategies
-func (sl *StrategyLogger) log(level domain.Level, msg string) {
+func (sl *StrategyLogBrt) log(level domain.Level, msg string) {
 	// Fast level check
 	if level < sl.level {
 		return
 	}
 
 	// Create log entry
-	entry := &domain.LogEntry{
-		Level:     level,
-		Message:   msg,
-		Timestamp: time.Now(),
-		Fields:    make(map[string]interface{}, len(sl.fields)),
-	}
-
-	// Copy fields efficiently
-	for k, v := range sl.fields {
-		entry.Fields[k] = v
-	}
+	entry := newLogEntry(level, msg, sl.fields)
 
 	// Apply strategies (filter, sample, mask)
 	processedEntry := sl.strategies.ProcessEntry(entry)
@@ -566,25 +594,110 @@ func (sl *StrategyLogger) log(level domain.Level, msg string) {
 	}
 }
 
+// ===== OVERRIDES: ensure StrategyLogBrt methods dispatch to its own log =====
+func (sl *StrategyLogBrt) Debug(msg string) { sl.log(domain.DebugLevel, msg) }
+func (sl *StrategyLogBrt) Info(msg string)  { sl.log(domain.InfoLevel, msg) }
+func (sl *StrategyLogBrt) Warn(msg string)  { sl.log(domain.WarnLevel, msg) }
+func (sl *StrategyLogBrt) Error(msg string) { sl.log(domain.ErrorLevel, msg) }
+func (sl *StrategyLogBrt) Fatal(msg string) { sl.log(domain.FatalLevel, msg) }
+
+func (sl *StrategyLogBrt) Debugf(format string, args ...interface{}) {
+	sl.log(domain.DebugLevel, fmt.Sprintf(format, args...))
+}
+func (sl *StrategyLogBrt) Infof(format string, args ...interface{}) {
+	sl.log(domain.InfoLevel, fmt.Sprintf(format, args...))
+}
+func (sl *StrategyLogBrt) Warnf(format string, args ...interface{}) {
+	sl.log(domain.WarnLevel, fmt.Sprintf(format, args...))
+}
+func (sl *StrategyLogBrt) Errorf(format string, args ...interface{}) {
+	sl.log(domain.ErrorLevel, fmt.Sprintf(format, args...))
+}
+func (sl *StrategyLogBrt) Fatalf(format string, args ...interface{}) {
+	sl.log(domain.FatalLevel, fmt.Sprintf(format, args...))
+}
+
+// ===== DERIVED BUILDER OVERRIDES: preserve StrategyLogBrt type =====
+
+// clone creates a StrategyLogBrt that preserves strategies/async while cloning base fields safely
+func (sl *StrategyLogBrt) clone() *StrategyLogBrt {
+	baseClone := sl.UnifiedLogBrt.clone()
+	return &StrategyLogBrt{
+		UnifiedLogBrt: baseClone,
+		strategies:    sl.strategies,
+		async:         sl.async,
+	}
+}
+
+// F adds a field and returns StrategyLogBrt for continued strategy/async behavior
+func (sl *StrategyLogBrt) F(key string, value interface{}) LogBrt {
+	clone := sl.clone()
+	clone.fields[key] = value
+	return clone
+}
+
+// Fs adds multiple fields and returns StrategyLogBrt
+func (sl *StrategyLogBrt) Fs(fields map[string]interface{}) LogBrt {
+	if len(fields) == 0 {
+		return sl
+	}
+	clone := sl.clone()
+	for k, v := range fields {
+		clone.fields[k] = v
+	}
+	return clone
+}
+
+// Ctx attaches context and common IDs while preserving type
+func (sl *StrategyLogBrt) Ctx(ctx context.Context) LogBrt {
+	if ctx == nil {
+		return sl
+	}
+	clone := sl.clone()
+	clone.fields["context"] = ctx
+	if traceID := extractFromContext(ctx, "trace_id"); traceID != "" {
+		clone.fields["trace_id"] = traceID
+	}
+	if userID := extractFromContext(ctx, "user_id"); userID != "" {
+		clone.fields["user_id"] = userID
+	}
+	if requestID := extractFromContext(ctx, "request_id"); requestID != "" {
+		clone.fields["request_id"] = requestID
+	}
+	return clone
+}
+
+func (sl *StrategyLogBrt) TraceID(id string) LogBrt   { return sl.F("trace_id", id) }
+func (sl *StrategyLogBrt) UserID(id string) LogBrt    { return sl.F("user_id", id) }
+func (sl *StrategyLogBrt) RequestID(id string) LogBrt { return sl.F("request_id", id) }
+
+// WithError attaches error while preserving type
+func (sl *StrategyLogBrt) WithError(err error) LogBrt {
+	if err == nil {
+		return sl
+	}
+	return sl.F("error", err.Error())
+}
+
 // Strategy management methods
-func (sl *StrategyLogger) AddFilter(filter FilterStrategy) {
+func (sl *StrategyLogBrt) AddFilter(filter FilterStrategy) {
 	sl.strategies.AddFilter(filter)
 }
 
-func (sl *StrategyLogger) AddSampler(sampler SamplerStrategy) {
+func (sl *StrategyLogBrt) AddSampler(sampler SamplerStrategy) {
 	sl.strategies.AddSampler(sampler)
 }
 
-func (sl *StrategyLogger) AddMasker(masker MaskingStrategy) {
+func (sl *StrategyLogBrt) AddMasker(masker MaskingStrategy) {
 	sl.strategies.AddMasker(masker)
 }
 
-func (sl *StrategyLogger) RemoveStrategy(strategyType, name string) {
+func (sl *StrategyLogBrt) RemoveStrategy(strategyType, name string) {
 	sl.strategies.RemoveStrategy(strategyType, name)
 }
 
 // GetStats returns comprehensive statistics
-func (sl *StrategyLogger) GetStats() StrategyStats {
+func (sl *StrategyLogBrt) GetStats() StrategyStats {
 	asyncStats := sl.async.Stats()
 
 	return StrategyStats{
@@ -599,7 +712,7 @@ func (sl *StrategyLogger) GetStats() StrategyStats {
 }
 
 // Stop gracefully stops all async operations
-func (sl *StrategyLogger) Stop() {
+func (sl *StrategyLogBrt) Stop() {
 	sl.async.Stop()
 }
 

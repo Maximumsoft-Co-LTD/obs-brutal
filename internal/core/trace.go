@@ -110,30 +110,34 @@ func GetEnvironment() string {
 }
 
 func GetOTELEndpoint() string {
+	if endpoint := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"); endpoint != "" {
+		return endpoint
+	}
 	if endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); endpoint != "" {
 		return endpoint
 	}
 	if endpoint := os.Getenv("JAEGER_ENDPOINT"); endpoint != "" {
 		return endpoint
 	}
-	return "http://localhost:14268"
+	// default gRPC port
+	return "localhost:4317"
 }
 
-// NewSmartLogger creates auto-detecting logger
-func NewSmartLogger() Logger {
-	// For now, return unified logger
+// NewSmartLogBrt creates auto-detecting LogBrt
+func NewSmartLogBrt() LogBrt {
+	// For now, return unified LogBrt
 	// Full smart detection will be added progressively
-	return NewUnifiedLogger(INFO)
+	return NewUnifiedLogBrt(INFO)
 }
 
-// NewSmartLoggerWithOptions creates logger with explicit options
-func NewSmartLoggerWithOptions(opts ...ConfigOption) Logger {
+// NewSmartLogBrtWithOptions creates LogBrt with explicit options
+func NewSmartLogBrtWithOptions(opts ...ConfigOption) LogBrt {
 	config := NewSmartConfig(opts...)
 
-	// Create appropriate logger based on configuration
+	// Create appropriate LogBrt based on configuration
 	if config.HasOTEL() && config.HasSecurity() {
 		// Full enterprise mode
-		if enterprise, err := NewEnterpriseLogger(
+		if enterprise, err := NewEnterpriseLogBrt(
 			config.GetServiceName(),
 			config.GetVersion(),
 			config.GetEnvironment(),
@@ -144,7 +148,7 @@ func NewSmartLoggerWithOptions(opts ...ConfigOption) Logger {
 		}
 	} else if config.HasOTEL() {
 		// OTEL mode
-		if otel, err := NewOTelLogger(
+		if otel, err := NewOTelLogBrt(
 			config.GetServiceName(),
 			config.GetVersion(),
 			config.GetEnvironment(),
@@ -155,11 +159,11 @@ func NewSmartLoggerWithOptions(opts ...ConfigOption) Logger {
 		}
 	} else if config.HasAsync() {
 		// Async mode
-		return NewAsyncLogger(config.options.LogLevel)
+		return NewAsyncLogBrt(config.options.LogLevel)
 	}
 
-	// Default to unified logger
-	return NewUnifiedLogger(config.options.LogLevel)
+	// Default to unified LogBrt
+	return NewUnifiedLogBrt(config.options.LogLevel)
 }
 
 // ===== LOGTRC INTERFACE =====
@@ -223,7 +227,7 @@ type Tracer interface {
 // SmartLogTrc implements LogTrc with auto-detection and lazy loading
 type SmartLogTrc struct {
 	// Core components
-	logger    Logger
+	LogBrt    LogBrt
 	span      trace.Span
 	gin       *gin.Context
 	operation string
@@ -256,15 +260,15 @@ func NewSmartLogTrc(c *gin.Context, operation string, opts ...ConfigOption) LogT
 	// Create smart configuration
 	config := NewSmartConfig(opts...)
 
-	// Create smart logger
-	logger := NewSmartLogger()
+	// Create smart LogBrt
+	LogBrt := NewSmartLogBrt()
 
 	// Auto-extract correlation IDs from Gin
 	traceID := extractTraceFromGin(c)
 	spanID := extractSpanFromGin(c)
 
 	logtrc := &SmartLogTrc{
-		logger:    logger,
+		LogBrt:    LogBrt,
 		gin:       c,
 		operation: operation,
 		fields:    make(map[string]interface{}, 8),
@@ -325,33 +329,6 @@ func (lt *SmartLogTrc) setupOTELWithConfig(config *SmartConfig) {
 	}
 }
 
-// setupOTEL initializes OTEL integration
-func (lt *SmartLogTrc) setupOTEL() {
-	// Create OTEL provider if not exists
-	if lt.otelProvider == nil {
-		if provider, err := NewOTelProvider(
-			GetServiceName(),
-			GetVersion(),
-			GetEnvironment(),
-			GetOTELEndpoint(),
-		); err == nil {
-			lt.otelProvider = provider
-		}
-	}
-
-	// Start root span for operation
-	if lt.otelProvider != nil && lt.gin != nil {
-		ctx := lt.gin.Request.Context()
-		spanCtx, span := lt.otelProvider.StartSpan(ctx, lt.operation)
-
-		lt.span = span
-		lt.gin.Request = lt.gin.Request.WithContext(spanCtx)
-
-		// Extract trace info
-		lt.traceID, lt.spanID = lt.otelProvider.ExtractTraceInfo(spanCtx)
-	}
-}
-
 // setupSecurity initializes security features
 func (lt *SmartLogTrc) setupSecurity() {
 	if lt.security == nil {
@@ -387,6 +364,35 @@ func (lt *SmartLogTrc) addGinContext() {
 	}
 }
 
+// buildLogBrtWithTrace builds a LogBrt prefilled with current trace context and user fields
+func (lt *SmartLogTrc) buildLogBrtWithTrace() LogBrt {
+	log := lt.LogBrt.Fs(lt.fields)
+	if lt.traceID != "" {
+		log = log.F("trace_id", lt.traceID)
+	}
+	if lt.spanID != "" {
+		log = log.F("span_id", lt.spanID)
+	}
+	if lt.module != "" {
+		log = log.F("module", lt.module)
+	}
+	return log
+}
+
+// startSpanAndBind starts a span and binds it back to Gin request context
+func (lt *SmartLogTrc) startSpanAndBind(ctx context.Context, name string) context.Context {
+	if lt.otelProvider == nil {
+		return ctx
+	}
+	spanCtx, span := lt.otelProvider.StartSpan(ctx, name)
+	lt.span = span
+	if lt.gin != nil {
+		lt.gin.Request = lt.gin.Request.WithContext(spanCtx)
+	}
+	lt.traceID, lt.spanID = lt.otelProvider.ExtractTraceInfo(spanCtx)
+	return spanCtx
+}
+
 // ===== LOGTRC INTERFACE IMPLEMENTATION =====
 
 // Fs extracts and masks fields in one line (replaces ExtractFields)
@@ -413,7 +419,7 @@ func (lt *SmartLogTrc) SinceTime(enabled bool) LogTrc {
 	duration := time.Since(lt.startTime)
 	if duration > 0 {
 		// Calculate approximate logs/sec based on current session
-		logCount := lt.logger.LogCount()
+		logCount := lt.LogBrt.LogCount()
 		logsPerSecond := float64(logCount) / duration.Seconds()
 
 		lt.Prt("Performance: %.0f logs/sec (%.2f ms elapsed)",
@@ -517,8 +523,8 @@ func (lt *SmartLogTrc) Err(msg string, err error) error {
 		))
 	}
 
-	// Log error through smart logger
-	lt.logger.WithError(err).Error(msg)
+	// Log error through smart LogBrt
+	lt.LogBrt.WithError(err).Error(msg)
 
 	return err
 }
@@ -548,19 +554,7 @@ func (lt *SmartLogTrc) Code(code int) attribute.KeyValue {
 func (lt *SmartLogTrc) Prt(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 
-	// Add trace context to logger
-	contextLogger := lt.logger.Fs(lt.fields)
-	if lt.traceID != "" {
-		contextLogger = contextLogger.F("trace_id", lt.traceID)
-	}
-	if lt.spanID != "" {
-		contextLogger = contextLogger.F("span_id", lt.spanID)
-	}
-	if lt.module != "" {
-		contextLogger = contextLogger.F("module", lt.module)
-	}
-
-	contextLogger.Info(msg)
+	lt.buildLogBrtWithTrace().Info(msg)
 }
 
 // Prtf formatted print and log
@@ -579,7 +573,7 @@ func (lt *SmartLogTrc) PrtTrc() {
 		"child_traces": len(lt.childTraces),
 	}
 
-	lt.logger.Fs(traceData).Info("Trace data dump")
+	lt.LogBrt.Fs(traceData).Info("Trace data dump")
 }
 
 // R creates response builder (simplified - no .Build() needed)
@@ -672,7 +666,7 @@ func (lt *SmartLogTrc) clone() *SmartLogTrc {
 	defer lt.mu.RUnlock()
 
 	clone := &SmartLogTrc{
-		logger:       lt.logger,
+		LogBrt:       lt.LogBrt,
 		span:         lt.span,
 		gin:          lt.gin,
 		operation:    lt.operation,
@@ -805,7 +799,7 @@ func (st *SmartTracer) Err(msg string, err error) error {
 	}
 
 	// Log through parent
-	st.parent.logger.WithError(err).Error(msg)
+	st.parent.LogBrt.WithError(err).Error(msg)
 
 	return err
 }
@@ -851,7 +845,7 @@ func (st *SmartTracer) Prt(format string, args ...interface{}) {
 	allFields["trace_name"] = st.name
 	allFields["trace_type"] = map[bool]string{true: "child", false: "flat"}[st.isChild]
 
-	st.parent.logger.Fs(allFields).Info(msg)
+	st.parent.LogBrt.Fs(allFields).Info(msg)
 }
 
 func (st *SmartTracer) Prtf(format string, args ...interface{}) {
@@ -867,7 +861,7 @@ func (st *SmartTracer) PrtTrc() {
 		"fields":      st.fields,
 	}
 
-	st.parent.logger.Fs(traceData).Info("Tracer data dump")
+	st.parent.LogBrt.Fs(traceData).Info("Tracer data dump")
 }
 
 func (st *SmartTracer) R(status int, options ...interface{}) *SimpleResponseBuilder {
@@ -926,49 +920,7 @@ type SimpleResponseBuilder struct {
 	printEnabled bool
 }
 
-// SimpleResponseOption configures response builder
-type SimpleResponseOption func(*SimpleResponseBuilder)
-
-// ResponseOptions factory with chainable methods
-type ResponseOptions struct {
-	options []SimpleResponseOption
-}
-
-// OptsResponse creates response options factory
-func OptsResponse() *ResponseOptions {
-	return &ResponseOptions{
-		options: make([]SimpleResponseOption, 0, 3),
-	}
-}
-
-// Detail sets error detail (chainable)
-func (o *ResponseOptions) Detail(detail string) *ResponseOptions {
-	o.options = append(o.options, func(rb *SimpleResponseBuilder) {
-		rb.detail = detail
-	})
-	return o
-}
-
-// Msg sets response message (chainable)
-func (o *ResponseOptions) Msg(msg string) *ResponseOptions {
-	o.options = append(o.options, func(rb *SimpleResponseBuilder) {
-		rb.msg = msg
-	})
-	return o
-}
-
-// Response sets response payload (chainable)
-func (o *ResponseOptions) Response(data interface{}) *ResponseOptions {
-	o.options = append(o.options, func(rb *SimpleResponseBuilder) {
-		rb.payload = data
-	})
-	return o
-}
-
-// Build returns all accumulated options
-func (o *ResponseOptions) Build() []SimpleResponseOption {
-	return o.options
-}
+// (deprecated) ResponseOptions/SimpleResponseOption removed in favor of ResponseOpts in options.go
 
 // Err handles error response with auto-logging and optional printing
 func (rb *SimpleResponseBuilder) Err(err error) error {

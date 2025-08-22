@@ -3,6 +3,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -162,10 +163,10 @@ func (ap *AsyncPipeline) sinkWorker() {
 		case batch := <-ap.batchChan:
 			// Process batch
 			for _, entry := range batch {
-				// Write to all sinks concurrently
+				// Write to all sinks sequentially (fast, predictable)
 				for _, sink := range ap.sinks {
 					if sink != nil {
-						sink.Write(entry)
+						_ = sink.Write(entry)
 					}
 				}
 				ap.processed.Add(1)
@@ -198,44 +199,34 @@ type AsyncStats struct {
 	QueueSize uint64 `json:"queue_size"`
 }
 
-// AsyncLogger wraps UnifiedLogger with async pipeline
-type AsyncLogger struct {
-	*UnifiedLogger
+// AsyncLogBrt wraps UnifiedLogBrt with async pipeline
+type AsyncLogBrt struct {
+	*UnifiedLogBrt
 	pipeline *AsyncPipeline
 }
 
-// NewAsyncLogger creates logger with async pipeline
-func NewAsyncLogger(level Level, sinks ...Sink) *AsyncLogger {
+// NewAsyncLogBrt creates LogBrt with async pipeline
+func NewAsyncLogBrt(level Level, sinks ...Sink) *AsyncLogBrt {
 	pipeline := NewAsyncPipeline(1000, 4, 100*time.Millisecond, sinks...)
 
-	// Create base logger without sinks (pipeline handles them)
-	baseLogger := NewUnifiedLogger(level)
+	// Create base LogBrt without sinks (pipeline handles them)
+	baseLogBrt := NewUnifiedLogBrt(level)
 
-	return &AsyncLogger{
-		UnifiedLogger: baseLogger,
+	return &AsyncLogBrt{
+		UnifiedLogBrt: baseLogBrt,
 		pipeline:      pipeline,
 	}
 }
 
 // Override log method to use async pipeline
-func (al *AsyncLogger) log(level domain.Level, msg string) {
+func (al *AsyncLogBrt) log(level domain.Level, msg string) {
 	// Fast level check
 	if level < al.level {
 		return
 	}
 
 	// Create log entry efficiently
-	entry := &domain.LogEntry{
-		Level:     level,
-		Message:   msg,
-		Timestamp: time.Now(),
-		Fields:    make(map[string]interface{}, len(al.fields)),
-	}
-
-	// Copy fields efficiently
-	for k, v := range al.fields {
-		entry.Fields[k] = v
-	}
+	entry := newLogEntry(level, msg, al.fields)
 
 	// Write async (non-blocking)
 	if !al.pipeline.WriteAsync(entry) {
@@ -253,12 +244,35 @@ func (al *AsyncLogger) log(level domain.Level, msg string) {
 	}
 }
 
+// ===== OVERRIDES: ensure AsyncLogBrt methods dispatch to its own log =====
+func (al *AsyncLogBrt) Debug(msg string) { al.log(domain.DebugLevel, msg) }
+func (al *AsyncLogBrt) Info(msg string)  { al.log(domain.InfoLevel, msg) }
+func (al *AsyncLogBrt) Warn(msg string)  { al.log(domain.WarnLevel, msg) }
+func (al *AsyncLogBrt) Error(msg string) { al.log(domain.ErrorLevel, msg) }
+func (al *AsyncLogBrt) Fatal(msg string) { al.log(domain.FatalLevel, msg) }
+
+func (al *AsyncLogBrt) Debugf(format string, args ...interface{}) {
+	al.log(domain.DebugLevel, fmt.Sprintf(format, args...))
+}
+func (al *AsyncLogBrt) Infof(format string, args ...interface{}) {
+	al.log(domain.InfoLevel, fmt.Sprintf(format, args...))
+}
+func (al *AsyncLogBrt) Warnf(format string, args ...interface{}) {
+	al.log(domain.WarnLevel, fmt.Sprintf(format, args...))
+}
+func (al *AsyncLogBrt) Errorf(format string, args ...interface{}) {
+	al.log(domain.ErrorLevel, fmt.Sprintf(format, args...))
+}
+func (al *AsyncLogBrt) Fatalf(format string, args ...interface{}) {
+	al.log(domain.FatalLevel, fmt.Sprintf(format, args...))
+}
+
 // GetAsyncStats returns async pipeline statistics
-func (al *AsyncLogger) GetAsyncStats() AsyncStats {
+func (al *AsyncLogBrt) GetAsyncStats() AsyncStats {
 	return al.pipeline.Stats()
 }
 
 // Stop gracefully stops async pipeline
-func (al *AsyncLogger) Stop() {
+func (al *AsyncLogBrt) Stop() {
 	al.pipeline.Stop()
 }

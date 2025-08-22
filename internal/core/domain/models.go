@@ -108,15 +108,6 @@ func (e *StructuredError) GetDetails() map[string]interface{} { return e.Details
 // GetCause returns error cause
 func (e *StructuredError) GetCause() error { return e.Cause }
 
-// ResponseOption configures response builder
-type ResponseOption func(*ResponseConfig)
-
-// ResponseConfig holds response configuration
-type ResponseConfig struct {
-	Message string
-	Fields  map[string]interface{}
-}
-
 // FilterRule represents a filter rule
 type FilterRule struct {
 	ID       string
