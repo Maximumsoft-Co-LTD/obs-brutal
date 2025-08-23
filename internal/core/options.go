@@ -1,7 +1,10 @@
 // Package core provides options-based configuration (no environment variables)
 package core
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
 
 // ===== CONFIGURATION OPTIONS =====
 
@@ -15,9 +18,12 @@ type ConfigOptions struct {
 	PromtailEndpoint   string
 	PrometheusEndpoint string
 	LokiEndpoint       string
+	LokiLabels         map[string]string
+	OTelResource       map[string]string
 	MaskingEnabled     bool
 	AsyncEnabled       bool
 	LogLevel           Level
+	UseZerolog         bool
 }
 
 // NewConfigOptions creates default configuration
@@ -29,6 +35,8 @@ func NewConfigOptions() *ConfigOptions {
 		LogLevel:       INFO,
 		MaskingEnabled: false, // Only when explicitly enabled
 		AsyncEnabled:   false, // Only when explicitly enabled
+		LokiLabels:     map[string]string{},
+		OTelResource:   map[string]string{},
 	}
 }
 
@@ -93,6 +101,13 @@ func Loki(endpoint string) ConfigOption {
 	}
 }
 
+// LokiLabels sets default labels for Loki/Promtail
+func LokiLabels(labels map[string]string) ConfigOption {
+	return func(opts *ConfigOptions) {
+		opts.LokiLabels = labels
+	}
+}
+
 // Masking enables PII masking
 func Masking(enabled bool) ConfigOption {
 	return func(opts *ConfigOptions) {
@@ -111,6 +126,20 @@ func Async(enabled bool) ConfigOption {
 func LogLevel(level Level) ConfigOption {
 	return func(opts *ConfigOptions) {
 		opts.LogLevel = level
+	}
+}
+
+// Zerolog enables zerolog sink usage
+func Zerolog(enabled bool) ConfigOption {
+	return func(opts *ConfigOptions) {
+		opts.UseZerolog = enabled
+	}
+}
+
+// OTelResource sets resource attributes for OTLP export
+func OTelResource(attrs map[string]string) ConfigOption {
+	return func(opts *ConfigOptions) {
+		opts.OTelResource = attrs
 	}
 }
 
@@ -248,16 +277,12 @@ func extractStructFieldsAdvanced(data interface{}) map[string]interface{} {
 		return make(map[string]interface{})
 	}
 
-	// For now, return simplified extraction
-	// In production, this would use proper reflection with struct tag parsing
 	fields := make(map[string]interface{})
 
-	// Simple type assertion for common cases
 	switch v := data.(type) {
 	case map[string]interface{}:
 		return v
 	default:
-		// Use reflection for structs
 		if isStruct(v) {
 			return extractFromStruct(v)
 		}
@@ -269,14 +294,58 @@ func extractStructFieldsAdvanced(data interface{}) map[string]interface{} {
 
 // isStruct checks if value is a struct
 func isStruct(v interface{}) bool {
-	// Simplified check - in production would use proper reflection
-	return false
+	if v == nil {
+		return false
+	}
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Ptr {
+		rv = rv.Elem()
+	}
+	return rv.IsValid() && rv.Kind() == reflect.Struct
 }
 
 // extractFromStruct extracts fields from struct
 func extractFromStruct(v interface{}) map[string]interface{} {
-	// Simplified implementation - in production would parse struct tags
-	return map[string]interface{}{
-		"struct_data": fmt.Sprintf("%+v", v),
+	rv := reflect.ValueOf(v)
+	rt := reflect.TypeOf(v)
+
+	if rt.Kind() == reflect.Ptr {
+		rv = rv.Elem()
+		rt = rt.Elem()
 	}
+	if !rv.IsValid() || rt.Kind() != reflect.Struct {
+		return map[string]interface{}{"data": fmt.Sprintf("%+v", v)}
+	}
+
+	out := make(map[string]interface{}, rt.NumField())
+	for i := 0; i < rt.NumField(); i++ {
+		field := rt.Field(i)
+		// skip unexported
+		if field.PkgPath != "" {
+			continue
+		}
+		name := field.Name
+		if jsonTag := field.Tag.Get("json"); jsonTag != "" {
+			tok := jsonTag
+			if idx := indexComma(tok); idx >= 0 {
+				tok = tok[:idx]
+			}
+			if tok != "" && tok != "-" {
+				name = tok
+			}
+		}
+		val := rv.Field(i).Interface()
+		out[name] = val
+	}
+	return out
+}
+
+// indexComma returns index of first comma or -1
+func indexComma(s string) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == ',' {
+			return i
+		}
+	}
+	return -1
 }
