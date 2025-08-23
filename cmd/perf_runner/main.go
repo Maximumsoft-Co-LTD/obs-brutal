@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -27,6 +28,11 @@ func main() {
 		workersIn  = flag.String("workers", "1,cpu", "comma list of worker counts: e.g. '1,cpu,2cpu'")
 		modesIn    = flag.String("modes", "unified,async,strategy", "logger modes to run")
 		structured = flag.Bool("structured", false, "include structured fields in logs")
+		sinkType   = flag.String("sink", "devnull", "sink type: devnull|stdout|buffer|file")
+		filePath   = flag.String("file", "logs/perf.log", "file path for sink=file")
+		bufSize    = flag.Int("buffer_size", 1000, "buffer size for sink=buffer")
+		bufTimeout = flag.Duration("buffer_timeout", 100*time.Millisecond, "flush timeout for sink=buffer")
+		summary    = flag.Bool("summary", false, "print concise summary to stderr only")
 	)
 	flag.Parse()
 
@@ -68,11 +74,38 @@ func main() {
 	}
 
 	// Setup sink
-	nullSink := &devNullSink{}
+	var selectedSink core.Sink
+	switch strings.ToLower(*sinkType) {
+	case "stdout":
+		selectedSink = core.NewFastStdoutSink()
+	case "buffer":
+		selectedSink = core.NewBufferedSinkWith(*bufSize, *bufTimeout)
+	case "file":
+		fs := core.NewOptimalFileSink()
+		_ = fs.Configure(map[string]interface{}{
+			"filename": *filePath,
+		})
+		selectedSink = fs
+	case "devnull":
+		fallthrough
+	default:
+		selectedSink = &devNullSink{}
+	}
 
-	fmt.Printf("\n== OBS-Brutal Perf Runner ==\n")
-	fmt.Printf("GoMaxProcs: %d, CPU: %d, Structured: %v\n", runtime.GOMAXPROCS(0), runtime.NumCPU(), *structured)
-	fmt.Printf("Total ops/scenario: %d\n", *totalOps)
+	if !*summary {
+		fmt.Printf("\n== OBS-Brutal Perf Runner ==\n")
+		fmt.Printf("GoMaxProcs: %d, CPU: %d, Structured: %v\n", runtime.GOMAXPROCS(0), runtime.NumCPU(), *structured)
+		fmt.Printf("Total ops/scenario: %d\n", *totalOps)
+	}
+
+	printResult := func(mode string, d time.Duration, lps float64, us float64) {
+		line := fmt.Sprintf("%s  | %s | logs/sec=%0.f | per_log_us=%.2f\n", mode, d, lps, us)
+		if *summary {
+			_, _ = os.Stderr.WriteString(line)
+		} else {
+			fmt.Print(line)
+		}
+	}
 
 	run := func(name string, logger core.LogBrt, total, workers int, structured bool) (logsPerSec float64, perLogUs float64, duration time.Duration) {
 		perWorker := total / workers
@@ -117,27 +150,29 @@ func main() {
 	}
 
 	for _, workers := range workersList {
-		fmt.Printf("\n--- Workers: %d ---\n", workers)
+		if !*summary {
+			fmt.Printf("\n--- Workers: %d ---\n", workers)
+		}
 
 		if modeSet["unified"] {
-			l := core.NewUnifiedLogBrt(core.INFO, nullSink)
+			l := core.NewUnifiedLogBrt(core.INFO, selectedSink)
 			l2 := l // as core.LogBrt
 			lps, us, d := run("unified-basic", l2, *totalOps, workers, *structured)
-			fmt.Printf("unified   | %s | logs/sec=%0.f | per_log_us=%.2f\n", d, lps, us)
+			printResult("unified  ", d, lps, us)
 		}
 
 		if modeSet["async"] {
-			l := core.NewAsyncLogBrt(core.INFO, nullSink)
+			l := core.NewAsyncLogBrt(core.INFO, selectedSink)
 			var logger core.LogBrt = l
 			lps, us, d := run("async", logger, *totalOps, workers, *structured)
-			fmt.Printf("async     | %s | logs/sec=%0.f | per_log_us=%.2f\n", d, lps, us)
+			printResult("async    ", d, lps, us)
 		}
 
 		if modeSet["strategy"] {
-			l := core.NewStrategyLogBrt(core.INFO, nullSink)
+			l := core.NewStrategyLogBrt(core.INFO, selectedSink)
 			var logger core.LogBrt = l
 			lps, us, d := run("strategy", logger, *totalOps, workers, *structured)
-			fmt.Printf("strategy  | %s | logs/sec=%0.f | per_log_us=%.2f\n", d, lps, us)
+			printResult("strategy ", d, lps, us)
 		}
 	}
 }

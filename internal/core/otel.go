@@ -25,6 +25,13 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"go.opentelemetry.io/otel/trace"
+
+	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	commonv1 "go.opentelemetry.io/proto/otlp/common/v1"
+	logsv1 "go.opentelemetry.io/proto/otlp/logs/v1"
+	resourcev1 "go.opentelemetry.io/proto/otlp/resource/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // ===== OTEL PROVIDER =====
@@ -63,11 +70,11 @@ func NewOTelProvider(serviceName, version, environment, endpoint string) (*OTelP
 	}
 	endpoint = sanitizeGrpcEndpoint(endpoint)
 
-	// Create resource
+	// Create resource (omit schema URL to avoid conflicts across lib versions)
 	res, err := resource.Merge(
 		resource.Default(),
 		resource.NewWithAttributes(
-			semconv.SchemaURL,
+			"",
 			semconv.ServiceName(serviceName),
 			semconv.ServiceVersion(version),
 			semconv.DeploymentEnvironment(environment),
@@ -534,26 +541,170 @@ func GetOTelLog(c *gin.Context) LogBrt {
 type OTLPSink struct {
 	SinkBase
 	endpoint string
-	client   *http.Client
+	insecure bool
+	headers  map[string]string
+	resAttrs map[string]string
+	conn     *grpc.ClientConn
+	client   collectorlogs.LogsServiceClient
 	mu       sync.Mutex
 }
 
 func NewOTLPSink(endpoint string) *OTLPSink {
 	return &OTLPSink{
 		endpoint: endpoint,
-		client: &http.Client{
-			Timeout: 5 * time.Second,
-		},
+		insecure: true,
+		headers:  map[string]string{},
+		resAttrs: map[string]string{},
 	}
 }
 
 func (s *OTLPSink) Write(entry *domain.LogEntry) error {
-	// Convert log entry to OTLP format and send
-	// Simplified implementation
-	return nil
+	if entry == nil {
+		return nil
+	}
+	if s.endpoint == "" {
+		return fmt.Errorf("OTLPSink: empty endpoint")
+	}
+
+	s.mu.Lock()
+	if s.conn == nil {
+		conn, err := grpc.Dial(s.endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			s.mu.Unlock()
+			return err
+		}
+		s.conn = conn
+		s.client = collectorlogs.NewLogsServiceClient(conn)
+	}
+	client := s.client
+	resAttrs := s.resAttrs
+	s.mu.Unlock()
+
+	rl := &logsv1.ResourceLogs{
+		Resource: &resourcev1.Resource{Attributes: make([]*commonv1.KeyValue, 0, len(resAttrs))},
+		ScopeLogs: []*logsv1.ScopeLogs{
+			{LogRecords: []*logsv1.LogRecord{buildOTLPLogRecord(entry)}},
+		},
+	}
+	for k, v := range resAttrs {
+		rl.Resource.Attributes = append(rl.Resource.Attributes, &commonv1.KeyValue{
+			Key:   k,
+			Value: &commonv1.AnyValue{Value: &commonv1.AnyValue_StringValue{StringValue: v}},
+		})
+	}
+	req := &collectorlogs.ExportLogsServiceRequest{ResourceLogs: []*logsv1.ResourceLogs{rl}}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_, err := client.Export(ctx, req)
+	return err
 }
 
 func (s *OTLPSink) Name() string { return "otlp" }
+
+func (s *OTLPSink) Configure(config map[string]interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if v, ok := config["endpoint"].(string); ok && v != "" {
+		s.endpoint = v
+	}
+	if v, ok := config["insecure"].(bool); ok {
+		s.insecure = v
+	}
+	if v, ok := config["headers"].(map[string]string); ok {
+		s.headers = v
+	}
+	if v, ok := config["resource"].(map[string]string); ok {
+		s.resAttrs = v
+	}
+	return nil
+}
+
+func buildOTLPLogRecord(entry *domain.LogEntry) *logsv1.LogRecord {
+	lr := &logsv1.LogRecord{
+		TimeUnixNano:         uint64(entry.Timestamp.UnixNano()),
+		SeverityText:         entry.Level.String(),
+		Body:                 &commonv1.AnyValue{Value: &commonv1.AnyValue_StringValue{StringValue: entry.Message}},
+		Attributes:           []*commonv1.KeyValue{},
+		ObservedTimeUnixNano: uint64(time.Now().UnixNano()),
+	}
+	switch entry.Level {
+	case domain.DebugLevel:
+		lr.SeverityNumber = logsv1.SeverityNumber_SEVERITY_NUMBER_DEBUG
+	case domain.InfoLevel:
+		lr.SeverityNumber = logsv1.SeverityNumber_SEVERITY_NUMBER_INFO
+	case domain.WarnLevel:
+		lr.SeverityNumber = logsv1.SeverityNumber_SEVERITY_NUMBER_WARN
+	case domain.ErrorLevel:
+		lr.SeverityNumber = logsv1.SeverityNumber_SEVERITY_NUMBER_ERROR
+	default:
+		lr.SeverityNumber = logsv1.SeverityNumber_SEVERITY_NUMBER_UNSPECIFIED
+	}
+
+	if entry.TraceID != "" {
+		if b, err := hexStringToBytes(entry.TraceID); err == nil {
+			lr.TraceId = b
+		}
+	}
+	if entry.SpanID != "" {
+		if b, err := hexStringToBytes(entry.SpanID); err == nil {
+			lr.SpanId = b
+		}
+	}
+
+	for k, v := range entry.Fields {
+		if k == "context" {
+			continue
+		}
+		lr.Attributes = append(lr.Attributes, &commonv1.KeyValue{Key: k, Value: toAnyValue(v)})
+	}
+	if entry.RequestID != "" {
+		lr.Attributes = append(lr.Attributes, &commonv1.KeyValue{Key: "request_id", Value: &commonv1.AnyValue{Value: &commonv1.AnyValue_StringValue{StringValue: entry.RequestID}}})
+	}
+	return lr
+}
+
+func toAnyValue(v interface{}) *commonv1.AnyValue {
+	switch t := v.(type) {
+	case string:
+		return &commonv1.AnyValue{Value: &commonv1.AnyValue_StringValue{StringValue: t}}
+	case bool:
+		return &commonv1.AnyValue{Value: &commonv1.AnyValue_BoolValue{BoolValue: t}}
+	case int:
+		return &commonv1.AnyValue{Value: &commonv1.AnyValue_IntValue{IntValue: int64(t)}}
+	case int64:
+		return &commonv1.AnyValue{Value: &commonv1.AnyValue_IntValue{IntValue: t}}
+	case float64:
+		return &commonv1.AnyValue{Value: &commonv1.AnyValue_DoubleValue{DoubleValue: t}}
+	case float32:
+		return &commonv1.AnyValue{Value: &commonv1.AnyValue_DoubleValue{DoubleValue: float64(t)}}
+	default:
+		return &commonv1.AnyValue{Value: &commonv1.AnyValue_StringValue{StringValue: fmt.Sprintf("%v", v)}}
+	}
+}
+
+func hexStringToBytes(s string) ([]byte, error) {
+	dst := make([]byte, len(s)/2)
+	for i := 0; i < len(dst); i++ {
+		var b byte
+		for j := 0; j < 2; j++ {
+			c := s[i*2+j]
+			var v byte
+			switch {
+			case '0' <= c && c <= '9':
+				v = c - '0'
+			case 'a' <= c && c <= 'f':
+				v = c - 'a' + 10
+			case 'A' <= c && c <= 'F':
+				v = c - 'A' + 10
+			default:
+				return nil, fmt.Errorf("invalid hex")
+			}
+			b = (b << 4) | v
+		}
+		dst[i] = b
+	}
+	return dst, nil
+}
 
 // ===== AMQP INTEGRATION =====
 

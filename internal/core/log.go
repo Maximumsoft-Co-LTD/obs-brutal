@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,6 +18,8 @@ import (
 	"time"
 
 	"obs-brutal/internal/core/domain"
+
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // ===== SIMPLIFIED TYPES =====
@@ -109,6 +113,35 @@ type LogBrt interface {
 
 	// Metrics
 	LogCount() int64
+}
+
+// NewSmartLogBrtWithOptions returns a logger based on options (compat for facade)
+func NewSmartLogBrtWithOptions(opts ...ConfigOption) LogBrt {
+	config := NewSmartConfig(opts...)
+	if config.HasOTEL() && config.HasSecurity() {
+		if enterprise, err := NewEnterpriseLogBrt(
+			config.GetServiceName(),
+			config.GetVersion(),
+			config.GetEnvironment(),
+			config.GetOTELEndpoint(),
+			config.options.LogLevel,
+		); err == nil {
+			return enterprise
+		}
+	} else if config.HasOTEL() {
+		if otel, err := NewOTelLogBrt(
+			config.GetServiceName(),
+			config.GetVersion(),
+			config.GetEnvironment(),
+			config.GetOTELEndpoint(),
+			config.options.LogLevel,
+		); err == nil {
+			return otel
+		}
+	} else if config.HasAsync() {
+		return NewAsyncLogBrt(config.options.LogLevel)
+	}
+	return NewUnifiedLogBrt(config.options.LogLevel)
 }
 
 // UnifiedLogBrt is the single, best-performance logBrt implementation
@@ -347,6 +380,9 @@ type OptimalFileSink struct {
 	filename string
 	file     *os.File
 	mu       sync.Mutex
+	// rotation options
+	rotateBySizeBytes int64
+	maxBackups        int
 }
 
 func (s *OptimalFileSink) Write(entry *domain.LogEntry) error {
@@ -370,7 +406,32 @@ func (s *OptimalFileSink) Write(entry *domain.LogEntry) error {
 		s.file = f
 	}
 
+	// rotate if needed
+	if s.rotateBySizeBytes > 0 {
+		if fi, err := s.file.Stat(); err == nil {
+			if fi.Size() >= s.rotateBySizeBytes {
+				_ = s.file.Close()
+				s.rotateFiles()
+				f, err := os.OpenFile(s.filename, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+				if err != nil {
+					return err
+				}
+				s.file = f
+			}
+		}
+	}
+
 	return writeJSONToWriter(s.file, entry)
+}
+
+func (s *OptimalFileSink) rotateFiles() {
+	// simple backups: file -> file.1 -> file.2 ...
+	for i := s.maxBackups - 1; i >= 1; i-- {
+		old := fmt.Sprintf("%s.%d", s.filename, i)
+		newp := fmt.Sprintf("%s.%d", s.filename, i+1)
+		_ = os.Rename(old, newp)
+	}
+	_ = os.Rename(s.filename, fmt.Sprintf("%s.%d", s.filename, 1))
 }
 
 func (s *OptimalFileSink) Close() error {
@@ -385,6 +446,19 @@ func (s *OptimalFileSink) Close() error {
 }
 func (s *OptimalFileSink) Name() string { return "file" }
 
+func (s *OptimalFileSink) Configure(config map[string]interface{}) error {
+	if v, ok := config["filename"].(string); ok && v != "" {
+		s.filename = v
+	}
+	if v, ok := config["rotate_size_bytes"].(int64); ok && v > 0 {
+		s.rotateBySizeBytes = v
+	}
+	if v, ok := config["max_backups"].(int); ok && v > 0 {
+		s.maxBackups = v
+	}
+	return nil
+}
+
 // JSONSink provides pure JSON output
 type JSONSink struct{ SinkBase }
 
@@ -396,6 +470,457 @@ func (s *JSONSink) Write(entry *domain.LogEntry) error {
 }
 
 func (s *JSONSink) Name() string { return "json" }
+
+// ===== TOGGLE SINK (enable/disable wrapper) =====
+
+type ToggleSink struct {
+	SinkBase
+	inner   Sink
+	enabled atomic.Bool
+}
+
+func NewToggleSink(inner Sink, enabled bool) Sink {
+	t := &ToggleSink{inner: inner}
+	t.enabled.Store(enabled)
+	return t
+}
+
+func (t *ToggleSink) Write(entry *domain.LogEntry) error {
+	if entry == nil || !t.enabled.Load() || t.inner == nil {
+		return nil
+	}
+	return t.inner.Write(entry)
+}
+
+func (t *ToggleSink) Name() string {
+	if t.inner == nil {
+		return "toggle(nil)"
+	}
+	return "toggle(" + t.inner.Name() + ")"
+}
+
+func (t *ToggleSink) Configure(cfg map[string]interface{}) error {
+	if v, ok := cfg["enabled"].(bool); ok {
+		t.enabled.Store(v)
+	}
+	// pass-through configuration to inner if provided
+	if t.inner != nil {
+		_ = t.inner.Configure(cfg)
+	}
+	return nil
+}
+
+// NewConsoleSink wraps stdout sink with toggle
+func NewConsoleSink(enabled bool) Sink { return NewToggleSink(NewFastStdoutSink(), enabled) }
+
+// ===== LUMBERJACK FILE SINK =====
+
+type LumberjackSink struct {
+	SinkBase
+	lj *lumberjack.Logger
+	mu sync.Mutex
+	// config cache
+	filename   string
+	maxSizeMB  int
+	maxBackups int
+	maxAgeDays int
+	compress   bool
+}
+
+func NewLumberjackSink() Sink {
+	return &LumberjackSink{
+		filename:   "logs/app.log",
+		maxSizeMB:  50,
+		maxBackups: 7,
+		maxAgeDays: 7,
+		compress:   true,
+	}
+}
+
+func (s *LumberjackSink) ensure() {
+	if s.lj != nil {
+		return
+	}
+	s.lj = &lumberjack.Logger{
+		Filename:   s.filename,
+		MaxSize:    s.maxSizeMB,
+		MaxBackups: s.maxBackups,
+		MaxAge:     s.maxAgeDays,
+		Compress:   s.compress,
+	}
+}
+
+func (s *LumberjackSink) Write(entry *domain.LogEntry) error {
+	if entry == nil {
+		return nil
+	}
+	s.mu.Lock()
+	s.ensure()
+	s.mu.Unlock()
+	b, err := encodeEntryToJSON(entry)
+	if err != nil {
+		return err
+	}
+	_, err = s.lj.Write(b)
+	return err
+}
+
+func (s *LumberjackSink) Name() string { return "lumberjack" }
+
+func (s *LumberjackSink) Configure(cfg map[string]interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if v, ok := cfg["filename"].(string); ok && v != "" {
+		s.filename = v
+	}
+	if v, ok := cfg["max_size_mb"].(int); ok && v > 0 {
+		s.maxSizeMB = v
+	}
+	if v, ok := cfg["max_backups"].(int); ok && v >= 0 {
+		s.maxBackups = v
+	}
+	if v, ok := cfg["max_age_days"].(int); ok && v >= 0 {
+		s.maxAgeDays = v
+	}
+	if v, ok := cfg["compress"].(bool); ok {
+		s.compress = v
+	}
+	s.lj = nil // recreate on next write
+	return nil
+}
+
+// ===== CLICKHOUSE SINK (HTTP JSONEachRow) =====
+
+type ClickHouseSink struct {
+	SinkBase
+	endpoint   string
+	database   string
+	table      string
+	username   string
+	password   string
+	autoCreate bool
+	client     *http.Client
+	initOnce   sync.Once
+}
+
+func NewClickHouseSink() Sink {
+	return &ClickHouseSink{
+		endpoint:   "http://localhost:8123",
+		database:   "default",
+		table:      "logs",
+		autoCreate: true,
+		client:     &http.Client{Timeout: 5 * time.Second},
+	}
+}
+
+func (s *ClickHouseSink) Name() string { return "clickhouse" }
+
+func (s *ClickHouseSink) Configure(cfg map[string]interface{}) error {
+	if v, ok := cfg["endpoint"].(string); ok && v != "" {
+		s.endpoint = v
+	}
+	if v, ok := cfg["database"].(string); ok && v != "" {
+		s.database = v
+	}
+	if v, ok := cfg["table"].(string); ok && v != "" {
+		s.table = v
+	}
+	if v, ok := cfg["username"].(string); ok {
+		s.username = v
+	}
+	if v, ok := cfg["password"].(string); ok {
+		s.password = v
+	}
+	if v, ok := cfg["auto_create"].(bool); ok {
+		s.autoCreate = v
+	}
+	return nil
+}
+
+func (s *ClickHouseSink) ensureTable() {
+	if !s.autoCreate {
+		return
+	}
+	create := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s.%s (
+        datetime DateTime,
+        level LowCardinality(String),
+        msg String,
+        trace_id String, span_id String, request_id String, user_id String,
+        module String, tenant_id String, error String,
+        fields String
+    ) ENGINE = MergeTree ORDER BY (datetime, level)`, s.database, s.table)
+	_ = s.execQuery(create)
+}
+
+func (s *ClickHouseSink) execQuery(query string) error {
+	u, _ := url.Parse(s.endpoint)
+	q := u.Query()
+	q.Set("query", query)
+	u.RawQuery = q.Encode()
+	req, _ := http.NewRequest("POST", u.String(), nil)
+	if s.username != "" {
+		req.SetBasicAuth(s.username, s.password)
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("clickhouse status: %s", resp.Status)
+	}
+	return nil
+}
+
+func (s *ClickHouseSink) Write(entry *domain.LogEntry) error {
+	if entry == nil {
+		return nil
+	}
+	s.initOnce.Do(s.ensureTable)
+	// build row JSON matching table schema
+	dt := entry.Timestamp.Format("2006-01-02 15:04:05")
+	traceID := entry.TraceID
+	if traceID == "" {
+		if v, ok := entry.Fields["trace_id"].(string); ok {
+			traceID = v
+		}
+	}
+	spanID := entry.SpanID
+	if spanID == "" {
+		if v, ok := entry.Fields["span_id"].(string); ok {
+			spanID = v
+		}
+	}
+	requestID := entry.RequestID
+	if requestID == "" {
+		if v, ok := entry.Fields["request_id"].(string); ok {
+			requestID = v
+		}
+	}
+	userID := entry.UserID
+	if userID == "" {
+		if v, ok := entry.Fields["user_id"].(string); ok {
+			userID = v
+		}
+	}
+	module := entry.Module
+	if module == "" {
+		if v, ok := entry.Fields["module"].(string); ok {
+			module = v
+		}
+	}
+	tenant := entry.TenantID
+	if tenant == "" {
+		if v, ok := entry.Fields["tenant_id"].(string); ok {
+			tenant = v
+		}
+	}
+	errStr := ""
+	if entry.Error != nil {
+		errStr = entry.Error.Error()
+	} else if v, ok := entry.Fields["error"].(string); ok {
+		errStr = v
+	}
+	fieldsJSON, _ := json.Marshal(entry.Fields)
+	rowMap := map[string]interface{}{
+		"datetime":   dt,
+		"level":      entry.Level.String(),
+		"msg":        entry.Message,
+		"trace_id":   traceID,
+		"span_id":    spanID,
+		"request_id": requestID,
+		"user_id":    userID,
+		"module":     module,
+		"tenant_id":  tenant,
+		"error":      errStr,
+		"fields":     string(fieldsJSON),
+	}
+	row, err := json.Marshal(rowMap)
+	if err != nil {
+		return err
+	}
+	u, _ := url.Parse(s.endpoint)
+	q := u.Query()
+	q.Set("query", fmt.Sprintf("INSERT INTO %s.%s FORMAT JSONEachRow", s.database, s.table))
+	u.RawQuery = q.Encode()
+	req, _ := http.NewRequest("POST", u.String(), bytes.NewReader(row))
+	if s.username != "" {
+		req.SetBasicAuth(s.username, s.password)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("clickhouse insert: %s", resp.Status)
+	}
+	return nil
+}
+
+// ===== ALERT SINKS WITH SIMPLE RETRY/BACKOFF =====
+
+// retry with exponential backoff (max 5 attempts, starting 200ms)
+func retryBackoff(op func() error) error {
+	delay := 200 * time.Millisecond
+	for attempt := 0; attempt < 5; attempt++ {
+		if err := op(); err != nil {
+			if attempt == 4 {
+				return err
+			}
+			time.Sleep(delay)
+			if delay < 2*time.Second {
+				delay *= 2
+			}
+			continue
+		}
+		return nil
+	}
+	return nil
+}
+
+// SlackSink posts to Slack Incoming Webhook
+type SlackSink struct {
+	SinkBase
+	webhookURL string
+	client     *http.Client
+}
+
+func NewSlackSink(webhookURL string) Sink {
+	return &SlackSink{webhookURL: webhookURL, client: &http.Client{Timeout: 5 * time.Second}}
+}
+
+func (s *SlackSink) Name() string { return "slack" }
+
+func (s *SlackSink) Configure(cfg map[string]interface{}) error {
+	if v, ok := cfg["webhook_url"].(string); ok && v != "" {
+		s.webhookURL = v
+	}
+	return nil
+}
+
+func (s *SlackSink) Write(entry *domain.LogEntry) error {
+	if entry == nil || s.webhookURL == "" {
+		return nil
+	}
+	payload := map[string]interface{}{
+		"text": fmt.Sprintf("[%s] %s", entry.Level.String(), entry.Message),
+	}
+	body, _ := json.Marshal(payload)
+	return retryBackoff(func() error {
+		req, _ := http.NewRequest("POST", s.webhookURL, bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := s.client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 300 {
+			return fmt.Errorf("slack status: %s", resp.Status)
+		}
+		return nil
+	})
+}
+
+// TelegramSink posts to Telegram bot API sendMessage
+type TelegramSink struct {
+	SinkBase
+	botToken string
+	chatID   string
+	client   *http.Client
+}
+
+func NewTelegramSink(botToken, chatID string) Sink {
+	return &TelegramSink{botToken: botToken, chatID: chatID, client: &http.Client{Timeout: 5 * time.Second}}
+}
+
+func (s *TelegramSink) Name() string { return "telegram" }
+
+func (s *TelegramSink) Configure(cfg map[string]interface{}) error {
+	if v, ok := cfg["bot_token"].(string); ok {
+		s.botToken = v
+	}
+	if v, ok := cfg["chat_id"].(string); ok {
+		s.chatID = v
+	}
+	return nil
+}
+
+func (s *TelegramSink) Write(entry *domain.LogEntry) error {
+	if entry == nil || s.botToken == "" || s.chatID == "" {
+		return nil
+	}
+	api := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", s.botToken)
+	data := map[string]string{"chat_id": s.chatID, "text": fmt.Sprintf("[%s] %s", entry.Level.String(), entry.Message)}
+	body, _ := json.Marshal(data)
+	return retryBackoff(func() error {
+		req, _ := http.NewRequest("POST", api, bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := s.client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 300 {
+			return fmt.Errorf("telegram status: %s", resp.Status)
+		}
+		return nil
+	})
+}
+
+// OpsgenieSink creates alert via Opsgenie API
+type OpsgenieSink struct {
+	SinkBase
+	apiKey   string
+	endpoint string
+	client   *http.Client
+	priority string
+}
+
+func NewOpsgenieSink(apiKey string) Sink {
+	return &OpsgenieSink{apiKey: apiKey, endpoint: "https://api.opsgenie.com/v2/alerts", client: &http.Client{Timeout: 5 * time.Second}, priority: "P3"}
+}
+
+func (s *OpsgenieSink) Name() string { return "opsgenie" }
+
+func (s *OpsgenieSink) Configure(cfg map[string]interface{}) error {
+	if v, ok := cfg["api_key"].(string); ok {
+		s.apiKey = v
+	}
+	if v, ok := cfg["endpoint"].(string); ok && v != "" {
+		s.endpoint = v
+	}
+	if v, ok := cfg["priority"].(string); ok && v != "" {
+		s.priority = v
+	}
+	return nil
+}
+
+func (s *OpsgenieSink) Write(entry *domain.LogEntry) error {
+	if entry == nil || s.apiKey == "" {
+		return nil
+	}
+	payload := map[string]interface{}{
+		"message":  fmt.Sprintf("[%s] %s", entry.Level.String(), entry.Message),
+		"priority": s.priority,
+	}
+	body, _ := json.Marshal(payload)
+	return retryBackoff(func() error {
+		req, _ := http.NewRequest("POST", s.endpoint, bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "GenieKey "+s.apiKey)
+		resp, err := s.client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 300 {
+			return fmt.Errorf("opsgenie status: %s", resp.Status)
+		}
+		return nil
+	})
+}
 
 // BufferedSink provides high-throughput logging
 type BufferedSink struct {
@@ -589,6 +1114,89 @@ func writeJSONToWriter(w io.Writer, entry *domain.LogEntry) error {
 	buf.WriteByte('\n')
 	_, err := w.Write(buf.Bytes())
 	return err
+}
+
+// encodeEntryToJSON returns JSON bytes for a log entry (without writing)
+func encodeEntryToJSON(entry *domain.LogEntry) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := writeJSONToWriter(&buf, entry); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// ===== LOKI PUSH SINK =====
+
+// LokiPushSink sends logs to Loki HTTP push API with labels.
+// Minimal payload for compatibility with Promtail/Agent.
+type LokiPushSink struct {
+	SinkBase
+	endpoint string
+	labels   map[string]string
+	client   *http.Client
+}
+
+func NewLokiPushSink(endpoint string, labels map[string]string) *LokiPushSink {
+	if labels == nil {
+		labels = map[string]string{"app": "obs-brutal"}
+	}
+	return &LokiPushSink{
+		endpoint: endpoint,
+		labels:   labels,
+		client:   &http.Client{Timeout: 5 * time.Second},
+	}
+}
+
+func (s *LokiPushSink) Name() string { return "loki" }
+
+func (s *LokiPushSink) Configure(cfg map[string]interface{}) error {
+	if v, ok := cfg["endpoint"].(string); ok && v != "" {
+		s.endpoint = v
+	}
+	if v, ok := cfg["labels"].(map[string]string); ok {
+		s.labels = v
+	}
+	return nil
+}
+
+func (s *LokiPushSink) Write(entry *domain.LogEntry) error {
+	if entry == nil || s.endpoint == "" {
+		return nil
+	}
+
+	// Build streams payload
+	// { "streams": [ { "stream": {label...}, "values": [[ts, line]] } ] }
+	lineBytes, err := encodeEntryToJSON(entry)
+	if err != nil {
+		return err
+	}
+	ts := entry.Timestamp.UnixNano()
+	payload := map[string]interface{}{
+		"streams": []map[string]interface{}{
+			{
+				"stream": s.labels,
+				"values": [][]string{{fmt.Sprintf("%d", ts), string(lineBytes)}},
+			},
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest("POST", s.endpoint, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("loki push failed: %s", resp.Status)
+	}
+	return nil
 }
 
 // newLogEntry creates a log entry from level, message and base fields.

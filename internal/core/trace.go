@@ -4,7 +4,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,156 +14,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
-
-// ===== SMART CAPABILITY DETECTOR =====
-
-// CapabilityDetector automatically detects available features
-type CapabilityDetector struct {
-	hasOTEL     atomic.Bool
-	hasSecurity atomic.Bool
-	hasAsync    atomic.Bool
-	hasGin      atomic.Bool
-	detected    atomic.Bool
-	mu          sync.Once
-}
-
-// GlobalDetector provides global capability detection
-var GlobalDetector = &CapabilityDetector{}
-
-// detectCapabilities performs one-time capability detection
-func (cd *CapabilityDetector) detectCapabilities() {
-	cd.mu.Do(func() {
-		// Detect OTEL endpoint
-		if otelEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); otelEndpoint != "" {
-			cd.hasOTEL.Store(true)
-		}
-		if jaegerEndpoint := os.Getenv("JAEGER_ENDPOINT"); jaegerEndpoint != "" {
-			cd.hasOTEL.Store(true)
-		}
-
-		// Detect security requirements
-		if piiMasking := os.Getenv("PII_MASKING"); piiMasking == "true" {
-			cd.hasSecurity.Store(true)
-		}
-		if auditEnabled := os.Getenv("AUDIT_TRAIL"); auditEnabled == "true" {
-			cd.hasSecurity.Store(true)
-		}
-
-		// Detect async requirements
-		if asyncEnabled := os.Getenv("ASYNC_LOGGING"); asyncEnabled == "true" {
-			cd.hasAsync.Store(true)
-		}
-		if highVolume := os.Getenv("HIGH_VOLUME"); highVolume == "true" {
-			cd.hasAsync.Store(true)
-		}
-
-		cd.detected.Store(true)
-	})
-}
-
-// HasOTEL checks if OTEL should be enabled
-func (cd *CapabilityDetector) HasOTEL() bool {
-	cd.detectCapabilities()
-	return cd.hasOTEL.Load()
-}
-
-// HasSecurity checks if security features should be enabled
-func (cd *CapabilityDetector) HasSecurity() bool {
-	cd.detectCapabilities()
-	return cd.hasSecurity.Load()
-}
-
-// HasAsync checks if async pipeline should be enabled
-func (cd *CapabilityDetector) HasAsync() bool {
-	cd.detectCapabilities()
-	return cd.hasAsync.Load()
-}
-
-// ===== CONFIGURATION HELPERS =====
-
-func GetServiceName() string {
-	if name := os.Getenv("SERVICE_NAME"); name != "" {
-		return name
-	}
-	if name := os.Getenv("OTEL_SERVICE_NAME"); name != "" {
-		return name
-	}
-	return "obs-brutal-service"
-}
-
-func GetVersion() string {
-	if version := os.Getenv("SERVICE_VERSION"); version != "" {
-		return version
-	}
-	return "1.0.0"
-}
-
-func GetEnvironment() string {
-	if env := os.Getenv("ENVIRONMENT"); env != "" {
-		return env
-	}
-	if env := os.Getenv("ENV"); env != "" {
-		return env
-	}
-	return "production"
-}
-
-func GetOTELEndpoint() string {
-	if endpoint := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"); endpoint != "" {
-		return endpoint
-	}
-	if endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); endpoint != "" {
-		return endpoint
-	}
-	if endpoint := os.Getenv("JAEGER_ENDPOINT"); endpoint != "" {
-		return endpoint
-	}
-	// default gRPC port
-	return "localhost:4317"
-}
-
-// NewSmartLogBrt creates auto-detecting LogBrt
-func NewSmartLogBrt() LogBrt {
-	// For now, return unified LogBrt
-	// Full smart detection will be added progressively
-	return NewUnifiedLogBrt(INFO)
-}
-
-// NewSmartLogBrtWithOptions creates LogBrt with explicit options
-func NewSmartLogBrtWithOptions(opts ...ConfigOption) LogBrt {
-	config := NewSmartConfig(opts...)
-
-	// Create appropriate LogBrt based on configuration
-	if config.HasOTEL() && config.HasSecurity() {
-		// Full enterprise mode
-		if enterprise, err := NewEnterpriseLogBrt(
-			config.GetServiceName(),
-			config.GetVersion(),
-			config.GetEnvironment(),
-			config.GetOTELEndpoint(),
-			config.options.LogLevel,
-		); err == nil {
-			return enterprise
-		}
-	} else if config.HasOTEL() {
-		// OTEL mode
-		if otel, err := NewOTelLogBrt(
-			config.GetServiceName(),
-			config.GetVersion(),
-			config.GetEnvironment(),
-			config.GetOTELEndpoint(),
-			config.options.LogLevel,
-		); err == nil {
-			return otel
-		}
-	} else if config.HasAsync() {
-		// Async mode
-		return NewAsyncLogBrt(config.options.LogLevel)
-	}
-
-	// Default to unified LogBrt
-	return NewUnifiedLogBrt(config.options.LogLevel)
-}
 
 // ===== LOGTRC INTERFACE =====
 
@@ -261,7 +110,7 @@ func NewSmartLogTrc(c *gin.Context, operation string, opts ...ConfigOption) LogT
 	config := NewSmartConfig(opts...)
 
 	// Create smart LogBrt
-	LogBrt := NewSmartLogBrt()
+	LogBrt := NewSmartLogBrtWithOptions(opts...)
 
 	// Auto-extract correlation IDs from Gin
 	traceID := extractTraceFromGin(c)

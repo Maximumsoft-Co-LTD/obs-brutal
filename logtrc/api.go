@@ -90,6 +90,21 @@ func NewBufferedSinkWith(size int, timeout time.Duration) Sink {
 	return core.NewBufferedSinkWith(size, timeout)
 }
 
+// Advanced sinks
+func NewOTLPSink(endpoint string) Sink { return core.NewOTLPSink(endpoint) }
+func NewLokiPushSink(endpoint string, labels map[string]string) Sink {
+	return core.NewLokiPushSink(endpoint, labels)
+}
+func NewZerologSink() Sink             { return core.NewZerologSink() }
+func NewConsoleSink(enabled bool) Sink { return core.NewConsoleSink(enabled) }
+func NewLumberjackSink() Sink          { return core.NewLumberjackSink() }
+func NewClickHouseSink() Sink          { return core.NewClickHouseSink() }
+
+// Alerts
+func NewSlackSink(webhook string) Sink             { return core.NewSlackSink(webhook) }
+func NewTelegramSink(botToken, chatID string) Sink { return core.NewTelegramSink(botToken, chatID) }
+func NewOpsgenieSink(apiKey string) Sink           { return core.NewOpsgenieSink(apiKey) }
+
 // ===== UNIFIED SMART FACTORY =====
 
 // New creates a smart logBrt with options (no environment variables).
@@ -138,9 +153,6 @@ func GetLogTrcFrmGin(c *gin.Context, operation string, opts ...ConfigOption) Log
 // OptsResponse creates response options factory for chainable helpers.
 // Deprecated: use Opts (NewResponseOpts) instead.
 func OptsResponse() *core.ResponseOpts { return core.NewResponseOpts() }
-
-// GlobalDetector exposes capability detection (optional usage).
-var GlobalDetector = core.GlobalDetector
 
 // ===== BACKWARD COMPATIBILITY (Optional Modes) =====
 
