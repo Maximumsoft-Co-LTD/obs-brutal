@@ -1,17 +1,18 @@
 package main
 
 import (
-	"context"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
+    "context"
+    "net/http"
+    "os"
+    "os/signal"
+    "syscall"
+    "time"
 
-	"obs-brutal/logtrc"
+    "obs-brutal/internal/util"
+    "obs-brutal/logtrc"
 
-	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
+    "github.com/gin-gonic/gin"
+    "github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -22,11 +23,11 @@ func main() {
 	rc := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379", DB: 0})
 	defer rc.Close()
 
-	r.GET("/cache/:key", func(c *gin.Context) {
-		ctx := c.Request.Context()
-		log := logtrc.GetLog(c)
-		key := c.Param("key")
-		val, err := rc.Get(ctx, key).Result()
+    r.GET("/cache/:key", func(c *gin.Context) {
+        ctx := util.WithTraceID(c.Request.Context(), "redis-trace-001")
+        log := logtrc.GetLog(c).Ctx(ctx)
+        key := c.Param("key")
+        val, err := rc.Get(ctx, key).Result()
 		if err == redis.Nil {
 			log.F("key", key).Info("cache miss")
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
@@ -37,13 +38,13 @@ func main() {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		log.F("key", key).Info("cache hit")
+        log.F("environment", "dev").F("key", key).Info("cache hit")
 		c.JSON(http.StatusOK, gin.H{"key": key, "value": val})
 	})
 
-	r.POST("/cache/:key", func(c *gin.Context) {
-		ctx := c.Request.Context()
-		key := c.Param("key")
+    r.POST("/cache/:key", func(c *gin.Context) {
+        ctx := util.WithTraceID(c.Request.Context(), "redis-trace-001")
+        key := c.Param("key")
 		val := c.Query("v")
 		if val == "" {
 			val = "1"
@@ -53,7 +54,7 @@ func main() {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		logtrc.GetLog(c).F("key", key).Info("saved")
+        logtrc.GetLog(c).Ctx(ctx).F("environment", "dev").F("key", key).Info("saved")
 		c.JSON(http.StatusOK, gin.H{"ok": true, "stored": val})
 	})
 

@@ -1,12 +1,13 @@
 package main
 
 import (
-	"net/http"
-	"os"
+    "net/http"
+    "os"
 
-	"obs-brutal/logtrc"
+    "obs-brutal/internal/util"
+    "obs-brutal/logtrc"
 
-	"github.com/gin-gonic/gin"
+    "github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -21,21 +22,22 @@ func main() {
 		endpoint = "jaeger:4317"
 	}
 
-	// Create OTEL-enabled LogBrt and middleware
-	otelLogBrt, err := logtrc.NewOTelLogBrt("example-gin", "1.0.0", "dev", endpoint, logtrc.INFO)
-	if err == nil && otelLogBrt != nil {
-		r.Use(logtrc.OTelMiddleware(otelLogBrt))
-	} else {
-		// Fallback to basic middleware if OTEL not available
-		r.Use(logtrc.Middleware("example-gin"))
-	}
+    // Create OTEL-enabled LogBrt with service label and middleware
+    otelLogBrt, _, err := logtrc.NewOTelWithService("example-gin", "1.0.0", "dev", endpoint, logtrc.INFO)
+    if err == nil && otelLogBrt != nil {
+        r.Use(logtrc.OTelMiddleware(otelLogBrt))
+    } else {
+        // Fallback to basic middleware if OTEL not available
+        r.Use(logtrc.Middleware("example-gin"))
+    }
 
-	r.GET("/", func(c *gin.Context) {
-		// Prefer OTEL-aware LogBrt if present
-		log := logtrc.GetOTelLog(c)
-		log.Info("hello from examples/gin (otel)")
-		c.String(http.StatusOK, "ok")
-	})
+    r.GET("/", func(c *gin.Context) {
+        // Prefer OTEL-aware LogBrt if present; demonstrate WithTraceID
+        ctx := util.WithTraceID(c.Request.Context(), "gin-trace-001")
+        log := logtrc.GetOTelLog(c).Ctx(ctx)
+        log.F("environment", "dev").Info("hello from examples/gin (otel)")
+        c.String(http.StatusOK, "ok")
+    })
 
 	r.Run(":8080")
 }

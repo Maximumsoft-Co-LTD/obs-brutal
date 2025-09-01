@@ -1,36 +1,37 @@
 package main
 
 import (
-	"context"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
+    "context"
+    "net/http"
+    "os"
+    "os/signal"
+    "syscall"
+    "time"
 
-	"obs-brutal/logtrc"
+    "obs-brutal/internal/util"
+    "obs-brutal/logtrc"
 
-	"github.com/gin-gonic/gin"
+    "github.com/gin-gonic/gin"
 )
 
 func main() {
 	r := gin.New()
 	// /metrics (Prometheus) via OTEL provider
-	var otel *logtrc.OTelLogBrt
-	if o, err := logtrc.NewOTelLogBrt("example-http", "1.0.0", "dev", "localhost:4317", logtrc.INFO); err == nil {
-		otel = o
-		// ลงทะเบียน /metrics ด้วย Prometheus handler
-		r.GET("/metrics", gin.WrapH(otel.GetOTelProvider().PrometheusHandler()))
-	}
+    if _, prov, err := logtrc.NewOTelWithService("example-http", "1.0.0", "dev", "localhost:4317", logtrc.INFO); err == nil {
+        // ลงทะเบียน /metrics ด้วย Prometheus handler
+        r.GET("/metrics", gin.WrapH(prov.PrometheusHandler()))
+    }
 
-	// Basic middleware attaching a per-request logger
+	// Basic middleware attaching a per-request logbrut
 	r.Use(logtrc.Middleware("example-http"))
 
-	r.GET("/health", func(c *gin.Context) {
-		log := logtrc.GetLog(c)
-		log.Info("health check")
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-	})
+    r.GET("/health", func(c *gin.Context) {
+        // demonstrate type-safe context keys
+        ctx := util.WithTraceID(c.Request.Context(), "demo-trace-id")
+        log := logtrc.GetLog(c).Ctx(ctx)
+        log.F("environment", "dev").Info("health check")
+        c.JSON(http.StatusOK, gin.H{"status": "ok"})
+    })
 
 	r.GET("/users/:id", func(c *gin.Context) {
 		log := logtrc.GetLog(c).F("route", "/users/:id")
@@ -59,7 +60,5 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(ctx)
-	if otel != nil {
-		_ = otel.GetOTelProvider().Shutdown(ctx)
-	}
+    // Provider shutdown is handled by adapter user if needed
 }
