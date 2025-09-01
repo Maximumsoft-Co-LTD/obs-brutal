@@ -1,19 +1,20 @@
 package main
 
 import (
-	"context"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
+    "context"
+    "net/http"
+    "os"
+    "os/signal"
+    "syscall"
+    "time"
 
-	"obs-brutal/logtrc"
+    "obs-brutal/internal/util"
+    "obs-brutal/logtrc"
 
-	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+    "github.com/gin-gonic/gin"
+    "go.mongodb.org/mongo-driver/bson"
+    "go.mongodb.org/mongo-driver/mongo"
+    "go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func main() {
@@ -30,9 +31,9 @@ func main() {
 	defer cli.Disconnect(context.Background())
 	coll := cli.Database("demo").Collection("users")
 
-	r.GET("/mongo", func(c *gin.Context) {
-		ctx := c.Request.Context()
-		log := logtrc.GetLog(c)
+    r.GET("/mongo", func(c *gin.Context) {
+        ctx := util.WithTraceID(c.Request.Context(), "mongo-trace-001")
+        log := logtrc.GetLog(c).Ctx(ctx)
 		cur, err := coll.Find(ctx, bson.M{"active": true}, options.Find().SetLimit(10))
 		if err != nil {
 			log.WithError(err).Error("mongo find failed")
@@ -46,20 +47,20 @@ func main() {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		log.F("count", len(out)).Info("fetched")
+        log.F("environment", "dev").F("count", len(out)).Info("fetched")
 		c.JSON(http.StatusOK, out)
 	})
 
-	r.POST("/mongo", func(c *gin.Context) {
-		ctx := c.Request.Context()
-		log := logtrc.GetLog(c)
+    r.POST("/mongo", func(c *gin.Context) {
+        ctx := util.WithTraceID(c.Request.Context(), "mongo-trace-001")
+        log := logtrc.GetLog(c).Ctx(ctx)
 		doc := bson.M{"name": "john", "active": true, "ts": time.Now()}
 		if _, err := coll.InsertOne(ctx, doc); err != nil {
 			log.WithError(err).Error("mongo insert failed")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		log.Info("inserted")
+        log.F("environment", "dev").Info("inserted")
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 

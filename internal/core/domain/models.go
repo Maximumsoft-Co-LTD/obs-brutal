@@ -64,16 +64,16 @@ type Field struct {
 // LogEntry represents a single log entry
 type LogEntry struct {
 	Level     Level
-	Message   string
-	Fields    map[string]interface{}
+	Msg       string
+	F         map[string]interface{}
 	Timestamp time.Time
-	Module    string
+	Mod       string
 	TenantID  string
 	UserID    string
 	TraceID   string
 	SpanID    string
 	RequestID string
-	Error     error
+	Err       error
 }
 
 // StructuredError represents a structured error
@@ -138,7 +138,7 @@ func GenerateID(prefix string) string {
 // NewLogEntry creates optimized log entry with Go 1.25 features
 func NewLogEntry() *LogEntry {
 	return &LogEntry{
-		Fields:    make(map[string]interface{}, 8), // Pre-allocate
+		F:         make(map[string]interface{}, 8), // Pre-allocate
 		Timestamp: time.Now(),
 	}
 }
@@ -147,21 +147,21 @@ func NewLogEntry() *LogEntry {
 func (le *LogEntry) Clone() *LogEntry {
 	clone := &LogEntry{
 		Level:     le.Level,
-		Message:   le.Message,
+		Msg:       le.Msg,
 		Timestamp: le.Timestamp,
-		Module:    le.Module,
+		Mod:       le.Mod,
 		TenantID:  le.TenantID,
 		UserID:    le.UserID,
 		TraceID:   le.TraceID,
 		SpanID:    le.SpanID,
 		RequestID: le.RequestID,
-		Error:     le.Error,
-		Fields:    make(map[string]interface{}, len(le.Fields)),
+		Err:       le.Err,
+		F:         make(map[string]interface{}, len(le.F)),
 	}
 
 	// Copy fields efficiently
-	for k, v := range le.Fields {
-		clone.Fields[k] = v
+	for k, v := range le.F {
+		clone.F[k] = v
 	}
 
 	return clone
@@ -170,54 +170,54 @@ func (le *LogEntry) Clone() *LogEntry {
 // Reset resets log entry for reuse (Go 1.25 optimized)
 func (le *LogEntry) Reset() {
 	le.Level = InfoLevel
-	le.Message = ""
+	le.Msg = ""
 	le.Timestamp = time.Time{}
-	le.Module = ""
+	le.Mod = ""
 	le.TenantID = ""
 	le.UserID = ""
 	le.TraceID = ""
 	le.SpanID = ""
 	le.RequestID = ""
-	le.Error = nil
+	le.Err = nil
 
 	// Go 1.25: Use clear() for efficient map reset
-	clear(le.Fields)
+	clear(le.F)
 }
 
 // AddField adds a field to the log entry
 func (le *LogEntry) AddField(key string, value interface{}) {
-	if le.Fields == nil {
-		le.Fields = make(map[string]interface{}, 8)
+	if le.F == nil {
+		le.F = make(map[string]interface{}, 8)
 	}
-	le.Fields[key] = value
+	le.F[key] = value
 }
 
 // AddFields adds multiple fields efficiently
 func (le *LogEntry) AddFields(fields map[string]interface{}) {
-	if le.Fields == nil {
-		le.Fields = make(map[string]interface{}, len(fields))
+	if le.F == nil {
+		le.F = make(map[string]interface{}, len(fields))
 	}
 
 	for k, v := range fields {
-		le.Fields[k] = v
+		le.F[k] = v
 	}
 }
 
 // HasField checks if field exists
 func (le *LogEntry) HasField(key string) bool {
-	_, exists := le.Fields[key]
+	_, exists := le.F[key]
 	return exists
 }
 
 // GetField gets field value with type assertion
 func (le *LogEntry) GetField(key string) (interface{}, bool) {
-	value, exists := le.Fields[key]
+	value, exists := le.F[key]
 	return value, exists
 }
 
 // GetStringField gets string field value
 func (le *LogEntry) GetStringField(key string) (string, bool) {
-	if value, exists := le.Fields[key]; exists {
+	if value, exists := le.F[key]; exists {
 		if str, ok := value.(string); ok {
 			return str, true
 		}

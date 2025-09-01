@@ -3,7 +3,7 @@
 High-performance logging and tracing toolkit for Go with clean APIs, optional OpenTelemetry, strategy-based filtering/sampling/masking, async pipeline, and web-friendly helpers.
 
 ### Highlights
-- **Unified logger core**: fast structured logging with fluent chaining
+- **Unified logbrut core**: fast structured logging with fluent chaining
 - **Async pipeline**: high-throughput non-blocking logging
 - **Strategy engine**: filter by level/module, sample by rate/adaptive, PII masking
 - **OTEL integration**: tracing + metrics + Gin middleware (optional)
@@ -24,11 +24,11 @@ import "obs-brutal/logtrc"
 func main() {
     log := logtrc.NewDefault()
     log.Info("hello world")
-    log.With("user_id", 123).Info("structured")
+    log.F("user_id", 123).Info("structured")
 }
 ```
 
-## Quick Setup (OTLP + Loki + Zerolog)
+## Quick Setup (OTEL + Loki + Zerolog)
 ```go
 package main
 
@@ -38,15 +38,17 @@ import (
 
 func main() {
     sinks := []logtrc.Sink{
-        logtrc.NewConsoleSink(true), // toggle terminal on/off
-        logtrc.NewOTLPSink("localhost:4317"),
-        logtrc.NewLokiPushSink("http://localhost:3100/loki/api/v1/push", map[string]string{
-            "app": "obs-brutal", "env": "dev",
-        }),
+        logtrc.NewConsoleSink(true),
+        logtrc.NewLokiPushSink("http://localhost:3100/loki/api/v1/push", map[string]string{"app": "obs-brutal", "env": "dev"}),
         logtrc.NewZerologSink(),
     }
-    log := logtrc.NewAsyncLogBrt(logtrc.INFO, sinks...)
-    log.F("module", "quicksetup").Info("obs-brutal ready")
+    var logger logtrc.LogBrt
+    if ot, _, err := logtrc.NewOTelWithService("quicksetup", "1.0.0", "dev", "localhost:4317", logtrc.INFO, sinks...); err == nil && ot != nil {
+        logger = ot
+    } else {
+        logger = logtrc.NewAsyncLogBrt(logtrc.INFO, sinks...)
+    }
+    logger.F("module", "quicksetup").F("environment", "dev").Info("obs-brutal ready")
 }
 ```
 Run the combined example:
@@ -140,7 +142,7 @@ log.With("sink", stdout.Name()).Info("ok")
 ```
 
 ### Multi-sinks (tee หลายปลายทางพร้อมกัน)
-ส่งออกหลายช่องทางพร้อมกันได้ โดยใส่หลาย `Sink` ตอนสร้าง logger
+ส่งออกหลายช่องทางพร้อมกันได้ โดยใส่หลาย `Sink` ตอนสร้าง logbrut
 ```go
 sinks := []logtrc.Sink{
   logtrc.NewConsoleSink(false),
@@ -154,6 +156,43 @@ log.F("module","demo").Info("multi-sinks tee")
 ```
 
 ## ClickHouse (SQL examples)
+
+## Project Structure (Hexagonal)
+
+- `internal/core/domain`: Domain models and pure types
+- `internal/core/port`: Ports (interfaces) for services/adapters
+- `internal/core/service`: Business logic (unified/async/strategy/otel loggers)
+  - `log/`: Smart LogTrc + ResponseBuilder for HTTP (Gin)
+  - `json/`: JSON writer helpers for `LogEntry`
+  - `strategy/`: Strategy interfaces + manager
+  - `otel/`: OTEL Provider (Tracer/Meter/metrics helper)
+  - `security/`: PII masking, audit trail, access control, `SecurityLogBrt`
+- `internal/adapter/...`: Inbound/Outbound adapters (HTTP middlewares, sinks, OTEL adapter facade)
+
+Principles:
+- Adapters never touch service internals; they depend on `port` + public `service` API only.
+- Security and OTEL are in subpackages to reduce coupling and clarify responsibilities.
+- Strategy manager sits in its own subpackage; the high‑level strategy logger remains in `service` to avoid import cycles.
+
+### Build & Test
+
+Run from module root (where `go.mod` lives):
+
+```
+go clean -cache -modcache
+CGO_ENABLED=0 go test ./...
+CGO_ENABLED=0 go build ./...
+```
+
+If you need CGO (macOS), first accept Xcode license:
+
+```
+sudo xcodebuild -license accept
+sudo xcodebuild -runFirstLaunch
+CGO_ENABLED=1 go build ./...
+```
+
+If you see `package ... is not in std`, ensure you are at the module root and clean caches as above.
 ตารางที่ sink ใช้งาน (สร้างอัตโนมัติถ้าเปิด `auto_create`):
 ```sql
 CREATE TABLE IF NOT EXISTS obs.logs (
@@ -219,15 +258,33 @@ curl 'http://localhost:8123/?query=SELECT%20count()%20FROM%20obs.logs'
 ```
 
 ## Web (Gin) with LogTrc
-Attach a lightweight logger per request with common fields and a response helper:
+Attach logger ต่อ request + ตัวอย่างใช้งาน ResponseBuilder + context แบบ type-safe
 ```go
+// Middleware แนบ log ต่อ request (มี fields พื้นฐานให้)
 r := gin.New()
 r.Use(logtrc.Middleware("checkout"))
 
-r.GET("/", func(c *gin.Context) {
+// Health check
+r.GET("/health", func(c *gin.Context) {
     log := logtrc.GetLog(c)
-    log.Info("hello from web")
+    log.Info("health ok")
     c.JSON(200, gin.H{"ok": true})
+})
+
+// ตัวอย่างดึง/ส่ง order พร้อม response builder
+r.GET("/orders/:id", func(c *gin.Context) {
+    // ใส่ TraceID ลง context แบบ type-safe
+    ctx := util.WithTraceID(c.Request.Context(), "trace-demo-001")
+    log := logtrc.GetLog(c).Ctx(ctx).F("route","/orders/:id")
+
+    id := c.Param("id")
+    // ... ทำงาน fetch ...
+    log.F("order_id", id).Info("fetched order")
+
+    // ใช้ ResponseBuilder สร้าง response และพิมพ์ log สรุป
+    logtrc.GetLogTrcFrmGin(c, "get_order").
+      R(200, logtrc.Opts.Msg("ok"), logtrc.Opts.Body(gin.H{"order_id": id}), logtrc.Opts.Prt(true)).
+      Send()
 })
 
 _ = r.Run(":8080")
@@ -235,7 +292,7 @@ _ = r.Run(":8080")
 
 ### OpenTelemetry (optional)
 ```go
-otel, _ := logtrc.NewOTelLogBrt("checkout", "1.0.0", "prod", "jaeger:4317", logtrc.INFO)
+otel, _, _ := logtrc.NewOTelWithService("checkout", "1.0.0", "prod", "jaeger:4317", logtrc.INFO)
 r := gin.New()
 r.Use(logtrc.OTelMiddleware(otel))
 
@@ -248,13 +305,39 @@ r.GET("/", func(c *gin.Context) {
 
 ## Strategy Engine (filter/sample/mask)
 ```go
-// internal/core usage example
-logger := core.NewStrategyLogBrt(core.INFO, logtrc.NewFastStdoutSink())
-logger.AddFilter(core.NewLevelFilter(core.INFO, core.ERROR))
-logger.AddSampler(core.NewRateSampler(0.25)) // 25%
-logger.AddMasker(core.NewPIIMasker())        // enterprise masking
+// via core/service facade
+logbrut := service.NewStrategyLogBrt(service.INFO, logtrc.NewFastStdoutSink())
+logbrut.AddFilter(service.NewLevelFilter(service.INFO, service.ERROR))
+logbrut.AddSampler(service.NewRateSampler(0.25)) // 25%
+logbrut.AddMasker(security.NewPIIMaskerStrategy())
+logbrut.F("email", "john.doe@example.com").Info("created user")
+```
 
-logger.F("email", "john.doe@example.com").Info("created user")
+### Strategy Examples (Detailed)
+
+CLI toggles (perf_runner):
+
+```bash
+go run ./cmd/perf_runner -summary -total=150000 -workers=cpu -modes=strategy -sink=devnull
+go run ./cmd/perf_runner -summary -total=150000 -workers=cpu -modes=strategy -sink=devnull -strategy_no_mask=true
+go run ./cmd/perf_runner -summary -total=150000 -workers=cpu -modes=strategy -sink=devnull -strategy_no_sample=true
+```
+
+Code toggles:
+
+```go
+s := service.NewStrategyLogBrt(service.INFO)
+// Remove by kind/name (see strategies.go names)
+s.RemoveStrategy("sampler", "rate_sampler")
+s.RemoveStrategy("masker",  "regex_masker")
+// Re-add/adjust at runtime
+s.AddSampler(service.NewRateSampler(0.5))      // 50%
+s.AddFilter(service.NewLevelFilter(service.INFO, service.ERROR))
+// Masking strategy from security package (PII)
+s.AddMasker(security.NewPIIMaskerStrategy())
+
+// Typical: filter -> sample -> mask -> emit
+s.F("email","john.doe@example.com").Info("user created")
 ```
 
 ## Async Pipeline
@@ -291,8 +374,86 @@ go test ./benchmarks -bench .
 go run ./cmd/perf_runner -total=300000 -workers=cpu -modes=unified,async,strategy -structured=true
 ```
 
+## E2E with Docker Compose
+
+Bring up the observability stack (Loki, Tempo, Jaeger, Prometheus, Grafana, Promtail, OTEL Collector, ClickHouse, Wiremock):
+
+```bash
+cd compose
+docker compose up -d
+```
+
+Endpoints (defaults):
+
+- OTLP gRPC: `localhost:4317`
+- Prometheus scrape (from collector): `localhost:8889`
+- Loki HTTP: `http://localhost:3100/loki/api/v1/push`
+- Jaeger UI: `http://localhost:16686`
+- Tempo Query: `http://localhost:3200`
+- Prometheus UI: `http://localhost:9090`
+- Grafana UI: `http://localhost:3000`
+- ClickHouse HTTP: `http://localhost:8123`
+- Wiremock (mock webhooks): `http://localhost:8089`
+
+Smoke test examples (in separate shells):
+
+```bash
+# 1) OTEL + Loki example (falls back to async if OTEL not available)
+go run ./examples/otel_loki
+
+# 2) Full demo (file + loki + zerolog + security masking)
+go run ./examples/full_demo
+
+# 3) HTTP (Gin) with middleware; then GET http://localhost:8081/health
+go run ./examples/http
+```
+
+Notes:
+
+- To verify Prometheus metrics: `curl http://localhost:8889/metrics`
+- To test Slack webhook sink, point webhook URL to Wiremock, e.g., `http://localhost:8089/notify`
+- Promtail tails local `logs/` directory (mounted in compose); configure file sink to write under `logs/` to see logs in Loki via Promtail.
+
+## Performance Tuning
+
+Recommended defaults (start here and tune with metrics):
+
+- Async + Buffered
+  - `buffer_size`: 1000
+  - `buffer_timeout`: 50–100ms
+  - Adjust to keep `dropped≈0` and avoid sustained `queue_size` spikes.
+- File output
+  - Lumberjack + Buffered
+  - Example: `filename=logs/app.log`, `rotate_size_bytes=10–50MB`, `max_backups=7–14`, `compress=true`
+- Network (Loki/OTLP)
+  - Async + batching/backoff
+  - Queue capacity for peak load (≈ peak logs/sec × flush window)
+  - Define clear drop policy & alerting
+- Hot‑path hygiene
+  - Avoid `fmt.Sprintf` in hot path; prefer structured fields
+  - Limit number/size of fields when throughput matters
+  - Put filters before samplers to short‑circuit early (e.g., drop DEBUG in prod)
+- Scaling
+  - Test workers `1`, `cpu`, `2cpu` on your workload; IO sinks often limit scaling
+
+Example baseline (devnull, CPU=8, structured=false):
+
+- Unified: ~7–8.5M logs/sec (≈0.12–0.16 µs/log)
+- Async: ~7–7.6M logs/sec (≈0.13–0.20 µs/log)
+
+With structured=true, throughput drops (JSON/fields overhead). With file/buffered, ~200–280k logs/sec is typical on a single host.
+
+Monitor with OTEL (built‑in hooks in `OTelLogBrt` and `NewAsyncLogBrtWithTelemetry`):
+
+- Counters (delta): `obs_async_processed_total`, `obs_async_dropped_total`, `obs_async_batches_total`
+- Gauge‑like histogram: `obs_async_queue_size`
+
+Alerting suggestions:
+
+- Dropped logs: `obs_async_dropped_total` increases continuously for ≥ 1m
+- Backlog: `obs_async_queue_size` ≥ 80% capacity for ≥ 1m
+- Throughput anomaly: sudden drop in `processed` rate vs baseline (SLO‑based)
+
 ## Notes
 - โค้ดใน `internal/core` คือ engine ภายใน; แนะนำให้ใช้งานผ่าน `logtrc` facade สำหรับ API ที่คงเสถียร
 - OTEL เป็นทางเลือก (optional). หากไม่ได้ตั้งค่า endpoint จะไม่เปิดใช้งาน
-
-
