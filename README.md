@@ -1,530 +1,459 @@
-# obs-brutal - ระบบ Logging และ Observability สำหรับ Go
+## obs-brutal
 
-obs-brutal เป็น logging library ที่ออกแบบตาม Hexagonal Architecture พร้อม features ครบครัน สำหรับ microservices และ distributed systems
+High-performance logging and tracing toolkit for Go with clean APIs, optional OpenTelemetry, strategy-based filtering/sampling/masking, async pipeline, and web-friendly helpers.
 
-## 🚀 การติดตั้ง
+### Highlights
+- **Unified logbrut core**: fast structured logging with fluent chaining
+- **Async pipeline**: high-throughput non-blocking logging
+- **Strategy engine**: filter by level/module, sample by rate/adaptive, PII masking
+- **OTEL integration**: tracing + metrics + Gin middleware (optional)
+- **Security mode**: field-level masking and audit trail (optional)
+- **Web facade (`logtrc`)**: small public surface, sensible defaults
 
-### จาก Local Path
+## Install
 ```bash
-go mod init your-project
-echo 'replace github.com/Maximumsoft-Co-LTD/obs-brutal => /path/to/obs-brutal' >> go.mod
-go mod tidy
+go get obs-brutal
 ```
 
-### จาก Git Repository
-```bash
-go get obs-brutal.yourdomain.com
+## Quick Start (basic)
+```go
+package main
+
+import "obs-brutal/logtrc"
+
+func main() {
+    log := logtrc.NewDefault()
+    log.Info("hello world")
+    log.F("user_id", 123).Info("structured")
+}
 ```
 
-## 🎯 การเริ่มต้นใช้งาน
-
-### ตัวอย่างพื้นฐาน
-
+## Quick Setup (OTEL + Loki + Zerolog)
 ```go
 package main
 
 import (
-    "fmt"
-    "net/http"
-    "time"
-    
-    obsv "obs-brutal.yourdomain.com/logbrutal"
-    "github.com/gin-gonic/gin"
+    "obs-brutal/logtrc"
 )
 
 func main() {
-    // 1) สร้าง Logger พร้อม Sink
-    stdout := obsv.NewStdoutSink()
-    logger, _ := obsv.NewLogger(obsv.WithLevel(obsv.InfoLevel), obsv.WithSinks(stdout))
-    
-    // 2) สร้าง Gin Engine พร้อม Middleware
-    r := obsv.NewGinEngine()
-    r.Use(obsv.GinMiddleware(logger))
-    
-    // 3) เพิ่ม Routes
-    r.GET("/ping", func(c *gin.Context) {
-        lg := obsv.GetLogFrmGin(c, "PingHandler")
-        defer lg.Close()
-        
-        // สร้าง Trace
-        tracer := lg.FlatPr("ping.operation")
-        defer tracer.End()
-        
-        // เพิ่ม Attributes
-        tracer.Add(
-            tracer.Str("endpoint", "/ping"),
-            tracer.Str("method", c.Request.Method),
-        )
-        
-        // Log Request
-        lg.F("endpoint", "/ping").Prt("Ping request received")
-        
-        // Response
-        lg.R(http.StatusOK)
-        c.JSON(http.StatusOK, gin.H{"ok": "pong"})
-    })
-    
-    r.Run(":8080")
-}
-```
-
-## 📖 คู่มือการใช้งาน
-
-### 1. Logger พื้นฐาน
-
-#### สร้าง Logger
-```go
-// Logger แบบง่าย
-logger, err := obsv.NewLogger(
-    obsv.WithLevel(obsv.InfoLevel),
-    obsv.WithSinks(obsv.NewStdoutSink()),
-)
-
-// Logger พร้อม Multiple Sinks
-logger, err := obsv.NewLogger(
-    obsv.WithLevel(obsv.InfoLevel),
-    obsv.WithSinks(
-        obsv.NewStdoutSink(),
-        obsv.NewFileSink("app.log", 100, 30, 10, true),
-    ),
-)
-```
-
-#### การ Log พื้นฐาน
-```go
-// Log levels
-logger.Debug("Debug message")
-logger.Info("Info message")
-logger.Warn("Warning message")
-logger.Error("Error message")
-
-// Log พร้อม Fields
-logger.F("user_id", "123").Info("User logged in")
-logger.Fs(map[string]interface{}{
-    "user_id": "123",
-    "action":  "login",
-}).Info("User action")
-
-// Log พร้อม Error
-logger.Err(err).Error("Something went wrong")
-```
-
-### 2. Gin Integration
-
-#### การติดตั้ง Middleware
-```go
-r := obsv.NewGinEngine()
-r.Use(obsv.GinMiddleware(logger))
-
-r.GET("/users/:id", func(c *gin.Context) {
-    lg := obsv.GetLogFrmGin(c, "GetUser")
-    defer lg.Close()
-    
-    userID := c.Param("id")
-    lg.F("user_id", userID).Prt("Getting user")
-    
-    // ทำงานต่อ...
-})
-```
-
-#### Response Logging
-```go
-r.POST("/users", func(c *gin.Context) {
-    lg := obsv.GetLogFrmGin(c, "CreateUser")
-    defer lg.Close()
-    
-    var user User
-    if err := c.ShouldBindJSON(&user); err != nil {
-        lg.Err(err)
-        lg.R(400)
-        c.JSON(400, gin.H{"error": "Invalid request"})
-        return
+    sinks := []logtrc.Sink{
+        logtrc.NewConsoleSink(true),
+        logtrc.NewLokiPushSink("http://localhost:3100/loki/api/v1/push", map[string]string{"app": "obs-brutal", "env": "dev"}),
+        logtrc.NewZerologSink(),
     }
-    
-    // สำเร็จ
-    lg.R(201)
-    c.JSON(201, user)
-})
-```
-
-### 3. Tracing
-
-#### สร้าง Traces
-```go
-func handleRequest(c *gin.Context) {
-    lg := obsv.GetLogFrmGin(c, "HandleRequest")
-    defer lg.Close()
-    
-    // Parent Trace
-    parentTrace := lg.FlatPr("request.process")
-    defer parentTrace.End()
-    
-    // Child Trace
-    childTrace := parentTrace.FlatPr("database.query")
-    childTrace.Add(
-        childTrace.Str("table", "users"),
-        childTrace.Str("operation", "SELECT"),
-        childTrace.Num("user_id", 123),
-    )
-    childTrace.End()
-    
-    // Error Trace
-    if err != nil {
-        errorTrace := parentTrace.FlatPr("error.handle")
-        errorTrace.Err(err)
-        errorTrace.End()
+    var logger logtrc.LogBrt
+    if ot, _, err := logtrc.NewOTelWithService("quicksetup", "1.0.0", "dev", "localhost:4317", logtrc.INFO, sinks...); err == nil && ot != nil {
+        logger = ot
+    } else {
+        logger = logtrc.NewAsyncLogBrt(logtrc.INFO, sinks...)
     }
+    logger.F("module", "quicksetup").F("environment", "dev").Info("obs-brutal ready")
 }
 ```
+Run the combined example:
+```bash
+go run ./examples/otel_loki
+```
 
-#### Trace Attributes
+## Console Toggle
+เปิด/ปิดการพิมพ์ลงเทอร์มินัลแบบ runtime-safe โดยไม่กระทบ sink อื่น แม้ปลายทางภายนอกล่ม
 ```go
-tracer := lg.FlatPr("operation")
-defer tracer.End()
+console := logtrc.NewConsoleSink(true) // true=on, false=off
+_ = console.Configure(map[string]interface{}{"enabled": false}) // ปิดภายหลัง
+```
 
-// เพิ่ม Attributes
-tracer.Add(
-    tracer.Str("service", "api"),
-    tracer.Bool("success", true),
-    tracer.Num("duration_ms", 125.5),
-    tracer.Code(200),
-    tracer.Detail("Processing completed"),
-    tracer.Msg("Operation successful"),
-)
+## Full Demo (all methods)
+ครอบคลุม Fluent API ทั้งหมด + Strategy + Security + OTLP + Loki + Zerolog + AMQP propagation
+```bash
+go run ./examples/full_demo
+```
 
-// Complex Object
-bodyData := map[string]interface{}{
-    "user": map[string]interface{}{
-        "id": "123",
-        "name": "John",
-    },
+## Method Reference (fluent API)
+```go
+// Fields
+log.F("key", "val").Info("msg")
+log.Fs(map[string]interface{}{"a":1,"b":true}).Info("msg")
+
+// Context & IDs
+log.Ctx(ctx).Info("with context")
+log.TraceID("trace-hex").SpanID("span-hex") // if available
+log.UserID("u-1").RequestID("req-1").Info("ids")
+
+// Errors
+log.WithError(err).Error("failed")
+
+// Levels
+log.Debug("msg"); log.Info("msg"); log.Warn("msg"); log.Error("msg")
+
+// Formatted
+log.Debugf("v=%d", 1); log.Infof("%s", "ok")
+```
+
+## Strategy (filters/samplers/maskers)
+```go
+s := core.NewStrategyLogBrt(core.INFO, logtrc.NewFastStdoutSink())
+s.AddFilter(core.NewLevelFilter(core.INFO, core.ERROR))
+s.AddSampler(core.NewRateSampler(0.25))
+s.AddMasker(core.NewPIIMasker())
+s.F("email","john@doe.com").Info("masked")
+```
+
+## Security (PII masking + access control + audit)
+```go
+sec, _ := logtrc.NewSecurityLogBrt("svc","1.0.0","prod","jaeger:4317", logtrc.INFO)
+sec.F("email","john@doe.com").Info("masked output")
+```
+
+## Compose Stack (Observability)
+อยู่ที่ `compose/`:
+- Grafana: 3000, Prometheus: 9090, Loki: 3100, Tempo: 3200, Jaeger: 16686, OTLP: 4317, ClickHouse: 8123
+```bash
+cd compose && docker compose up -d
+```
+
+## Sinks (outputs)
+```go
+stdout := logtrc.NewFastStdoutSink()
+json   := logtrc.NewJSONSink()
+file   := logtrc.NewOptimalFileSink()
+// configure rotation (optional)
+_ = file.Configure(map[string]interface{}{
+    "filename":           "logs/app.log",
+    "rotate_size_bytes":  10 << 20, // 10MB
+    "max_backups":        5,
+})
+
+// Production-grade rotation (lumberjack)
+lj := logtrc.NewLumberjackSink()
+_ = lj.Configure(map[string]interface{}{
+    "filename":"logs/app.log", "max_size_mb":100, "max_backups":14, "max_age_days":14, "compress":true,
+})
+
+// ClickHouse (HTTP JSONEachRow)
+ch := logtrc.NewClickHouseSink()
+_ = ch.Configure(map[string]interface{}{
+    "endpoint":"http://localhost:8123", "database":"obs", "table":"logs",
+    "username":"default", "password":"", "auto_create":true,
+})
+
+log := logtrc.New(logtrc.LogLevel(logtrc.INFO))
+log.With("sink", stdout.Name()).Info("ok")
+```
+
+### Multi-sinks (tee หลายปลายทางพร้อมกัน)
+ส่งออกหลายช่องทางพร้อมกันได้ โดยใส่หลาย `Sink` ตอนสร้าง logbrut
+```go
+sinks := []logtrc.Sink{
+  logtrc.NewConsoleSink(false),
+  logtrc.NewLumberjackSink(),
+  logtrc.NewOTLPSink("otel-collector:4317"),
+  logtrc.NewLokiPushSink("http://loki:3100/loki/api/v1/push", map[string]string{"app":"svc","env":"prod"}),
+  logtrc.NewClickHouseSink(),
 }
-bodyAttrs := tracer.Body("request", bodyData)
-tracer.Add(bodyAttrs...)
+log := logtrc.NewAsyncLogBrt(logtrc.INFO, sinks...)
+log.F("module","demo").Info("multi-sinks tee")
 ```
 
-### 4. Sinks (การส่งออก Log)
+## ClickHouse (SQL examples)
 
-#### Stdout Sink
+## Project Structure (Hexagonal)
+
+- `internal/core/domain`: Domain models and pure types
+- `internal/core/port`: Ports (interfaces) for services/adapters
+- `internal/core/service`: Business logic (unified/async/strategy/otel loggers)
+  - `log/`: Smart LogTrc + ResponseBuilder for HTTP (Gin)
+  - `json/`: JSON writer helpers for `LogEntry`
+  - `strategy/`: Strategy interfaces + manager
+  - `otel/`: OTEL Provider (Tracer/Meter/metrics helper)
+  - `security/`: PII masking, audit trail, access control, `SecurityLogBrt`
+- `internal/adapter/...`: Inbound/Outbound adapters (HTTP middlewares, sinks, OTEL adapter facade)
+
+Principles:
+- Adapters never touch service internals; they depend on `port` + public `service` API only.
+- Security and OTEL are in subpackages to reduce coupling and clarify responsibilities.
+- Strategy manager sits in its own subpackage; the high‑level strategy logger remains in `service` to avoid import cycles.
+
+### Build & Test
+
+Run from module root (where `go.mod` lives):
+
+```
+go clean -cache -modcache
+CGO_ENABLED=0 go test ./...
+CGO_ENABLED=0 go build ./...
+```
+
+If you need CGO (macOS), first accept Xcode license:
+
+```
+sudo xcodebuild -license accept
+sudo xcodebuild -runFirstLaunch
+CGO_ENABLED=1 go build ./...
+```
+
+If you see `package ... is not in std`, ensure you are at the module root and clean caches as above.
+ตารางที่ sink ใช้งาน (สร้างอัตโนมัติถ้าเปิด `auto_create`):
+```sql
+CREATE TABLE IF NOT EXISTS obs.logs (
+  datetime   DateTime,
+  level      LowCardinality(String),
+  msg        String,
+  trace_id   String,
+  span_id    String,
+  request_id String,
+  user_id    String,
+  module     String,
+  tenant_id  String,
+  error      String,
+  fields     String
+) ENGINE = MergeTree
+ORDER BY (datetime, level);
+```
+ตัวอย่าง query ทั่วไป:
+```sql
+-- ล่าสุด 100 แถว
+SELECT datetime, level, module, msg
+FROM obs.logs
+ORDER BY datetime DESC
+LIMIT 100;
+
+-- ปริมาณ log ตาม level ราย 1 นาที (ชั่วโมงล่าสุด)
+SELECT toStartOfMinute(datetime) AS ts, level, count() AS cnt
+FROM obs.logs
+WHERE datetime >= now() - INTERVAL 1 HOUR
+GROUP BY ts, level
+ORDER BY ts;
+
+-- Error rate ต่อ 1 นาที
+SELECT
+  toStartOfMinute(datetime) AS ts,
+  countIf(level IN ('ERROR','FATAL')) AS errors,
+  count() AS total,
+  errors / total AS error_rate
+FROM obs.logs
+WHERE datetime >= now() - INTERVAL 1 HOUR
+GROUP BY ts
+ORDER BY ts;
+
+-- กรองตาม module + user
+SELECT *
+FROM obs.logs
+WHERE module = 'checkout' AND user_id = 'u-1001' AND level IN ('WARN','ERROR','FATAL')
+ORDER BY datetime DESC
+LIMIT 50;
+
+-- ดึงฟิลด์ย่อยจาก JSON 'fields'
+SELECT datetime,
+  JSONExtractString(fields, 'order_id')  AS order_id,
+  JSONExtract(fields, 'amount','Float64') AS amount
+FROM obs.logs
+WHERE JSONHas(fields, 'order_id')
+ORDER BY datetime DESC
+LIMIT 50;
+```
+ทดสอบอย่างรวดเร็วด้วย HTTP:
+```bash
+curl 'http://localhost:8123/?query=SELECT%20count()%20FROM%20obs.logs'
+```
+
+## Web (Gin) with LogTrc
+Attach logger ต่อ request + ตัวอย่างใช้งาน ResponseBuilder + context แบบ type-safe
 ```go
-stdout := obsv.NewStdoutSink()
-logger, _ := obsv.NewLogger(
-    obsv.WithLevel(obsv.InfoLevel),
-    obsv.WithSinks(stdout),
-)
+// Middleware แนบ log ต่อ request (มี fields พื้นฐานให้)
+r := gin.New()
+r.Use(logtrc.Middleware("checkout"))
+
+// Health check
+r.GET("/health", func(c *gin.Context) {
+    log := logtrc.GetLog(c)
+    log.Info("health ok")
+    c.JSON(200, gin.H{"ok": true})
+})
+
+// ตัวอย่างดึง/ส่ง order พร้อม response builder
+r.GET("/orders/:id", func(c *gin.Context) {
+    // ใส่ TraceID ลง context แบบ type-safe
+    ctx := util.WithTraceID(c.Request.Context(), "trace-demo-001")
+    log := logtrc.GetLog(c).Ctx(ctx).F("route","/orders/:id")
+
+    id := c.Param("id")
+    // ... ทำงาน fetch ...
+    log.F("order_id", id).Info("fetched order")
+
+    // ใช้ ResponseBuilder สร้าง response และพิมพ์ log สรุป
+    logtrc.GetLogTrcFrmGin(c, "get_order").
+      R(200, logtrc.Opts.Msg("ok"), logtrc.Opts.Body(gin.H{"order_id": id}), logtrc.Opts.Prt(true)).
+      Send()
+})
+
+_ = r.Run(":8080")
 ```
 
-#### File Sink
+### OpenTelemetry (optional)
 ```go
-fileSink := obsv.NewFileSink(
-    "app.log",  // ชื่อไฟล์
-    100,        // ขนาดสูงสุด (MB)
-    30,         // จำนวนไฟล์เก็บ
-    10,         // วันเก็บ
-    true,       // compress
-)
-```
+otel, _, _ := logtrc.NewOTelWithService("checkout", "1.0.0", "prod", "jaeger:4317", logtrc.INFO)
+r := gin.New()
+r.Use(logtrc.OTelMiddleware(otel))
 
-#### HTTP Sink
-```go
-httpSink, err := obsv.NewHTTPSink(
-    "https://logs.example.com/api/logs",
-    map[string]string{"Authorization": "Bearer token"},
-    100,  // batch size
-    true, // retry
-)
-```
-
-#### Loki Sink
-```go
-lokiSink := obsv.NewLokiSink(
-    "http://localhost:3100/loki/api/v1/push",
-    map[string]string{
-        "service": "my-app",
-        "env":     "production",
-    },
-    100, // batch size
-)
-```
-
-#### Multiple Sinks
-```go
-multiplexSink := obsv.NewMultiplexSink(
-    obsv.NewStdoutSink(),
-    fileSink,
-    httpSink,
-    lokiSink,
-)
-
-logger, _ := obsv.NewLogger(
-    obsv.WithLevel(obsv.InfoLevel),
-    obsv.WithSinks(multiplexSink),
-)
-```
-
-### 5. Formatters
-
-```go
-// JSON Formatter
-jsonFormatter := obsv.NewJSONFormatter()
-sink := obsv.NewStdoutSink()
-sink.SetFormatter(jsonFormatter)
-
-// Text Formatter
-textFormatter := obsv.NewTextFormatter()
-
-// Logfmt Formatter
-logfmtFormatter := obsv.NewLogfmtFormatter()
-
-// CEF Formatter (for security logs)
-cefFormatter := obsv.NewCEFFormatter()
-```
-
-### 6. Configuration Management
-
-#### จาก File
-```yaml
-# config.yaml
-log:
-  level: "info"
-  file: "app.log"
-
-otel:
-  enabled: true
-  service_name: "my-service"
-  endpoint: "http://localhost:4318/v1/traces"
-```
-
-```go
-cfg, err := config.LoadConfig("config.yaml")
-```
-
-#### Redis Config Provider
-```go
-configSrc, err := obsv.NewRedisConfigProvider(
-    "localhost:6379", // address
-    "",               // password
-    0,                // database
-    "myapp:",         // key prefix
-)
-
-// อ่าน config
-level, err := configSrc.GetString("log.level")
-```
-
-### 7. Error Handling
-
-#### Error Categories
-```go
-type ValidationErrorHandler struct{}
-
-func (h *ValidationErrorHandler) Category() string { return "validation" }
-func (h *ValidationErrorHandler) Severity() obsv.Level { return obsv.WarnLevel }
-func (h *ValidationErrorHandler) ShouldAlert() bool { return false }
-func (h *ValidationErrorHandler) Handle(logger obsv.Logger, err error, details map[string]interface{}) {
-    logger.F("category", "validation").
-           Fs(details).
-           Err(err).
-           Warn("Validation error occurred")
-}
-
-// ใช้งาน
-errCategories := obsv.NewErrorCategories()
-errCategories.Register("validation", &ValidationErrorHandler{})
-
-errCategories.Handle(logger, err, "validation", map[string]interface{}{
-    "field": "email",
-    "value": "invalid-email",
+r.GET("/", func(c *gin.Context) {
+    log := logtrc.GetOTelLog(c)
+    log.Info("otel request")
+    c.String(200, "ok")
 })
 ```
 
-### 8. Testing
-
-#### Mock Logger
+## Strategy Engine (filter/sample/mask)
 ```go
-func TestUserService(t *testing.T) {
-    mockLogger := obsv.NewMockLogger()
-    userService := NewUserService(mockLogger)
-    
-    err := userService.CreateUser(&User{Name: "John"})
-    
-    assert.NoError(t, err)
-    assert.Greater(t, mockLogger.Logged(), 0)
-}
+// via core/service facade
+logbrut := service.NewStrategyLogBrt(service.INFO, logtrc.NewFastStdoutSink())
+logbrut.AddFilter(service.NewLevelFilter(service.INFO, service.ERROR))
+logbrut.AddSampler(service.NewRateSampler(0.25)) // 25%
+logbrut.AddMasker(security.NewPIIMaskerStrategy())
+logbrut.F("email", "john.doe@example.com").Info("created user")
 ```
 
-#### Safe Logger
-```go
-var nilLogger obsv.Logger
-safeLogger := obsv.NewSafeLogger(nilLogger)
+### Strategy Examples (Detailed)
 
-// จะไม่ panic แม้ว่า underlying logger จะเป็น nil
-safeLogger.Info("This won't panic")
-```
-
-## 🛠️ Advanced Features
-
-### Buffered Sink
-```go
-// สำหรับ performance ที่ดีขึ้น
-bufferedSink := obsv.NewBufferedSink(
-    httpSink,
-    1000,                    // buffer size
-    100*time.Millisecond,    // flush interval
-)
-```
-
-### Struct Tags และ PII Masking
-```go
-type User struct {
-    ID       string `json:"id" log:"user_id"`
-    Name     string `json:"name" log:"user_name"`
-    Email    string `json:"email" log:"email" pii:"true"`
-    Password string `json:"password" log:"-" pii:"true"`
-}
-
-user := User{
-    ID:       "123",
-    Name:     "John",
-    Email:    "john@example.com",
-    Password: "secret",
-}
-
-// ใช้ struct tags
-fields := obsv.ExtractFields(user)
-logger.Fs(fields).Info("User created")
-// PII จะถูก mask อัตโนมัติ
-```
-
-### Context Propagation
-```go
-logger = logger.
-    UID("user-123").
-    TID("trace-456").
-    RID("req-abc").
-    IP("192.168.1.1").
-    Sess("session-xyz").
-    Tenant("tenant-1").
-    Mod("user-service")
-```
-
-## 🚀 Production Best Practices
-
-### Performance Optimization
-```go
-func productionLogger() obsv.Logger {
-    // ใช้ buffered sinks สำหรับ remote endpoints
-    lokiSink := obsv.NewLokiSink("http://loki:3100/loki/api/v1/push", 
-        map[string]string{"service": "api"}, 100)
-    bufferedLoki := obsv.NewBufferedSink(lokiSink, 1000, 500*time.Millisecond)
-    
-    // Local file สำหรับ immediate access
-    fileSink := obsv.NewFileSink("app.log", 100, 30, 7, true)
-    
-    multiplexSink := obsv.NewMultiplexSink(bufferedLoki, fileSink)
-    
-    logger, _ := obsv.NewLogger(
-        obsv.WithLevel(obsv.InfoLevel),
-        obsv.WithSinks(multiplexSink),
-    )
-    
-    return logger
-}
-```
-
-### Monitoring Setup
-```go
-func setupMonitoring(router *gin.Engine) {
-    // Health check
-    router.GET("/health", func(c *gin.Context) {
-        c.JSON(200, gin.H{
-            "status": "healthy",
-            "timestamp": time.Now().Unix(),
-        })
-    })
-    
-    // Readiness check
-    router.GET("/ready", func(c *gin.Context) {
-        if !checkDatabase() || !checkRedis() {
-            c.JSON(503, gin.H{"status": "not ready"})
-            return
-        }
-        c.JSON(200, gin.H{"status": "ready"})
-    })
-}
-```
-
-## 📊 ตัวอย่างการใช้งานจริง
-
-### Complete Example
-ดูตัวอย่างที่สมบูรณ์ใน `_cmd/main.go`:
+CLI toggles (perf_runner):
 
 ```bash
-# รันตัวอย่าง
-go run _cmd/main.go
-
-# ทดสอบ endpoints
-curl http://localhost:8080/ping      # Ping endpoint
-curl http://localhost:8080/health    # Health check
-curl http://localhost:8080/error     # Error demo
+go run ./cmd/perf_runner -summary -total=150000 -workers=cpu -modes=strategy -sink=devnull
+go run ./cmd/perf_runner -summary -total=150000 -workers=cpu -modes=strategy -sink=devnull -strategy_no_mask=true
+go run ./cmd/perf_runner -summary -total=150000 -workers=cpu -modes=strategy -sink=devnull -strategy_no_sample=true
 ```
 
-### Log Output
-```json
-{
-  "client_ip": "::1",
-  "endpoint": "/ping",
-  "level": "INFO",
-  "message": "Ping request received",
-  "method": "GET",
-  "path": "/ping",
-  "request_id": "req-1755479186280259000",
-  "timestamp": "2025-08-18T08:06:26+07:00",
-  "user_agent": "curl/8.7.1"
-}
+Code toggles:
+
+```go
+s := service.NewStrategyLogBrt(service.INFO)
+// Remove by kind/name (see strategies.go names)
+s.RemoveStrategy("sampler", "rate_sampler")
+s.RemoveStrategy("masker",  "regex_masker")
+// Re-add/adjust at runtime
+s.AddSampler(service.NewRateSampler(0.5))      // 50%
+s.AddFilter(service.NewLevelFilter(service.INFO, service.ERROR))
+// Masking strategy from security package (PII)
+s.AddMasker(security.NewPIIMaskerStrategy())
+
+// Typical: filter -> sample -> mask -> emit
+s.F("email","john.doe@example.com").Info("user created")
 ```
 
-## 🔧 Configuration Examples
+## Async Pipeline
+- `AsyncLogBrt` and `StrategyLogBrt` ล็อกแบบ non-blocking, มี worker batcher/flush
+- เรียก `Stop()` เมื่อจบโปรเซสเพื่อให้ flush งานค้าง
 
-### Environment Variables
+## Security Mode
+```go
+sec, _ := logtrc.NewSecurityLogBrt("checkout", "1.0.0", "prod", "jaeger:4317", logtrc.INFO)
+sec.F("email", "john.doe@example.com").Info("masked output")
+```
+
+## Response Builder (LogTrc)
+```go
+rb := logtrc.GetLogTrcFrmGin(c, "create_order").R(200, logtrc.Opts.Msg("ok"))
+rb.Send()
+```
+
+## Tuning
+- **Level**: ลดเป็น `INFO`/`WARN` ในโปรดักชัน
+- **Async**: ปรับขนาด batch และ timeout (ดู `NewBufferedSinkWith`, `AsyncPipeline`)
+- **Sampling**: ใช้ `RateSampler` หรือ `AdaptiveSampler` ลดปริมาณลอค
+- **Masking**: เปิด `Masking(true)` เมื่อมี PII เพื่อความปลอดภัย
+- **File sink**: ตั้งค่า rotation เพื่อจำกัดขนาดไฟล์
+
+## Benchmarks
+รัน benchmark พื้นฐาน:
 ```bash
-export LOG_LEVEL=debug
-export LOG_FILE=/var/log/app.log
-export OTEL_ENABLED=true
-export OTEL_ENDPOINT=http://jaeger:14268/api/traces
+go test ./benchmarks -bench .
 ```
 
-### Docker Compose
-```yaml
-version: '3.8'
-services:
-  app:
-    build: .
-    environment:
-      - LOG_LEVEL=info
-      - LOKI_URL=http://loki:3100/loki/api/v1/push
-    volumes:
-      - ./logs:/app/logs
+รัน perf runner (ตัด IO):
+```bash
+go run ./cmd/perf_runner -total=300000 -workers=cpu -modes=unified,async,strategy -structured=true
 ```
 
-## 🤝 Contributing
+## E2E with Docker Compose
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+Bring up the observability stack (Loki, Tempo, Jaeger, Prometheus, Grafana, Promtail, OTEL Collector, ClickHouse, Wiremock):
 
-## 📝 License
+```bash
+cd compose
+docker compose up -d
+```
 
-This project is licensed under the MIT License.
+Endpoints (defaults):
 
-## 🙏 Acknowledgments
+- OTLP gRPC: `localhost:4317`
+- Prometheus scrape (from collector): `localhost:8889`
+- Loki HTTP: `http://localhost:3100/loki/api/v1/push`
+- Jaeger UI: `http://localhost:16686`
+- Tempo Query: `http://localhost:3200`
+- Prometheus UI: `http://localhost:9090`
+- Grafana UI: `http://localhost:3000`
+- ClickHouse HTTP: `http://localhost:8123`
+- Wiremock (mock webhooks): `http://localhost:8089`
 
-- [OpenTelemetry](https://opentelemetry.io/) for tracing standards
-- [Gin](https://gin-gonic.com/) for HTTP framework
-- [Zap](https://github.com/uber-go/zap) for high-performance logging
+Smoke test examples (in separate shells):
 
----
+```bash
+# 1) OTEL + Loki example (falls back to async if OTEL not available)
+go run ./examples/otel_loki
 
-สำหรับคำถามเพิ่มเติม กรุณาสร้าง [GitHub Issue](https://github.com/Maximumsoft-Co-LTD/obs-brutal/issues)
+# 2) Full demo (file + loki + zerolog + security masking)
+go run ./examples/full_demo
+
+# 3) HTTP (Gin) with middleware; then GET http://localhost:8081/health
+go run ./examples/http
+```
+
+Notes:
+
+- To verify Prometheus metrics: `curl http://localhost:8889/metrics`
+- To test Slack webhook sink, point webhook URL to Wiremock, e.g., `http://localhost:8089/notify`
+- Promtail tails local `logs/` directory (mounted in compose); configure file sink to write under `logs/` to see logs in Loki via Promtail.
+
+## Performance Tuning
+
+Recommended defaults (start here and tune with metrics):
+
+- Async + Buffered
+  - `buffer_size`: 1000
+  - `buffer_timeout`: 50–100ms
+  - Adjust to keep `dropped≈0` and avoid sustained `queue_size` spikes.
+- File output
+  - Lumberjack + Buffered
+  - Example: `filename=logs/app.log`, `rotate_size_bytes=10–50MB`, `max_backups=7–14`, `compress=true`
+- Network (Loki/OTLP)
+  - Async + batching/backoff
+  - Queue capacity for peak load (≈ peak logs/sec × flush window)
+  - Define clear drop policy & alerting
+- Hot‑path hygiene
+  - Avoid `fmt.Sprintf` in hot path; prefer structured fields
+  - Limit number/size of fields when throughput matters
+  - Put filters before samplers to short‑circuit early (e.g., drop DEBUG in prod)
+- Scaling
+  - Test workers `1`, `cpu`, `2cpu` on your workload; IO sinks often limit scaling
+
+Example baseline (devnull, CPU=8, structured=false):
+
+- Unified: ~7–8.5M logs/sec (≈0.12–0.16 µs/log)
+- Async: ~7–7.6M logs/sec (≈0.13–0.20 µs/log)
+
+With structured=true, throughput drops (JSON/fields overhead). With file/buffered, ~200–280k logs/sec is typical on a single host.
+
+Monitor with OTEL (built‑in hooks in `OTelLogBrt` and `NewAsyncLogBrtWithTelemetry`):
+
+- Counters (delta): `obs_async_processed_total`, `obs_async_dropped_total`, `obs_async_batches_total`
+- Gauge‑like histogram: `obs_async_queue_size`
+
+Alerting suggestions:
+
+- Dropped logs: `obs_async_dropped_total` increases continuously for ≥ 1m
+- Backlog: `obs_async_queue_size` ≥ 80% capacity for ≥ 1m
+- Throughput anomaly: sudden drop in `processed` rate vs baseline (SLO‑based)
+
+## Notes
+- โค้ดใน `internal/core` คือ engine ภายใน; แนะนำให้ใช้งานผ่าน `logtrc` facade สำหรับ API ที่คงเสถียร
+- OTEL เป็นทางเลือก (optional). หากไม่ได้ตั้งค่า endpoint จะไม่เปิดใช้งาน
