@@ -5,14 +5,14 @@
       "type": "timeseries",
       "title": "Log Count",
       "targets": [
-        { "expr": "obs_brutal_logs_total", "legendFormat": "logs" }
+        { "expr": "logs_total", "legendFormat": "logs" }
       ]
     },
     {
       "type": "timeseries",
       "title": "Error Count",
       "targets": [
-        { "expr": "obs_brutal_errors_total", "legendFormat": "errors" }
+        { "expr": "errors_total", "legendFormat": "errors" }
       ]
     },
     {
@@ -26,7 +26,7 @@
       "type": "stat",
       "title": "Queue Size (approx)",
       "targets": [
-        { "expr": "sum without(instance)(obs_brutal_logs_total)" }
+        { "expr": "sum without(instance)(logs_total)" }
       ]
     }
   ],

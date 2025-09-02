@@ -48,15 +48,15 @@ func NewOTelTelemetry(serviceName string, res *resource.Resource, tp *sdktrace.T
 
 func (t *OTelTelemetry) initMetrics() error {
 	var err error
-	t.logCounter, err = t.meter.Int64Counter("obs_brutal_logs_total")
+	t.logCounter, err = t.meter.Int64Counter("logs_total")
 	if err != nil {
 		return err
 	}
-	t.errorCounter, err = t.meter.Int64Counter("obs_brutal_errors_total")
+	t.errorCounter, err = t.meter.Int64Counter("errors_total")
 	if err != nil {
 		return err
 	}
-	t.durationHist, err = t.meter.Float64Histogram("obs_brutal_log_duration_seconds")
+	t.durationHist, err = t.meter.Float64Histogram("log_duration_seconds")
 	return err
 }
 
