@@ -13,7 +13,8 @@ import (
 // Configure is a no-op; Name returns "stdout".
 type FastStdoutSink struct{ port.SinkBase }
 
-func NewFastStdoutSink() port.Sink     { return &FastStdoutSink{} }
+func NewFastStdoutSink() port.Sink { return &FastStdoutSink{} }
+
 // Name returns the sink name.
 func (s *FastStdoutSink) Name() string { return "stdout" }
 func (s *FastStdoutSink) Write(entry *domain.LogEntry) error {

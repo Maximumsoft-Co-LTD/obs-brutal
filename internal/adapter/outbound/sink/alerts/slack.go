@@ -39,6 +39,7 @@ type SlackSink struct {
 func NewSlackSink(webhookURL string) port.Sink {
 	return &SlackSink{webhookURL: webhookURL, client: &http.Client{Timeout: 5 * time.Second}}
 }
+
 // Name returns the sink name.
 func (s *SlackSink) Name() string { return "slack" }
 func (s *SlackSink) Configure(cfg map[string]interface{}) error {

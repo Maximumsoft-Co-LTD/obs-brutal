@@ -1,21 +1,21 @@
 package log
 
 import (
-    "time"
+	"time"
 
-    "obs-brutal/internal/core/port"
+	"obs-brutal/internal/core/port"
 
-    "github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
 )
 
 // SimpleResponseBuilder is a minimal response builder for Gin that
 // formats a JSON response and optionally prints a short log line
 // through a tiny logger interface (Prt/GetTraceID).
 type SimpleResponseBuilder struct {
-    logtrc interface {
-        Prt(format string, args ...interface{})
-        GetTraceID() string
-    }
+	logtrc interface {
+		Prt(format string, args ...interface{})
+		GetTraceID() string
+	}
 	gin          *gin.Context
 	status       int
 	payload      interface{}
@@ -31,63 +31,67 @@ type SimpleResponseBuilder struct {
 // It returns a port.ResponseBuilder so callers in higher layers depend on
 // the port, not the concrete implementation.
 func NewSimpleResponseBuilder(g *gin.Context, l interface {
-    Prt(format string, args ...interface{})
-    GetTraceID() string
+	Prt(format string, args ...interface{})
+	GetTraceID() string
 }, status int) port.ResponseBuilder {
-    return &SimpleResponseBuilder{gin: g, logtrc: l, status: status}
+	return &SimpleResponseBuilder{gin: g, logtrc: l, status: status}
 }
 
 // Msg sets the top-level message string.
-func (rb *SimpleResponseBuilder) Msg(m string)       { rb.msg = m }
+func (rb *SimpleResponseBuilder) Msg(m string) { rb.msg = m }
+
 // Body sets the response payload (placed under data if message is present).
 func (rb *SimpleResponseBuilder) Body(v interface{}) { rb.payload = v }
+
 // Status sets a status string (separate from HTTP status code).
-func (rb *SimpleResponseBuilder) Status(s string)    { rb.statusMsg = s }
+func (rb *SimpleResponseBuilder) Status(s string) { rb.statusMsg = s }
+
 // Detail sets an optional error detail string.
-func (rb *SimpleResponseBuilder) Detail(d string)    { rb.detail = d }
+func (rb *SimpleResponseBuilder) Detail(d string) { rb.detail = d }
+
 // Prt enables printing a short log line via the provided printer.
-func (rb *SimpleResponseBuilder) Prt(enabled bool)   { rb.printEnabled = enabled }
+func (rb *SimpleResponseBuilder) Prt(enabled bool) { rb.printEnabled = enabled }
+
+// build constructs the base JSON payload with consistent fields.
+func (rb *SimpleResponseBuilder) build() gin.H {
+	resp := gin.H{}
+	if rb.msg != "" {
+		resp["message"] = rb.msg
+	}
+	if rb.statusMsg != "" {
+		resp["status"] = rb.statusMsg
+	}
+	if tid := rb.logtrc.GetTraceID(); tid != "" {
+		resp["trace_id"] = tid
+	}
+	resp["datetime"] = time.Now().Format(time.RFC3339Nano)
+	return resp
+}
 
 // Err writes an error JSON response using the previously configured fields
 // (message/status/detail) and returns the error for caller chaining.
 func (rb *SimpleResponseBuilder) Err(err error) error {
-    rb.err = err
-    resp := gin.H{}
-    if rb.msg != "" {
-        resp["message"] = rb.msg
-	} else {
+	rb.err = err
+	resp := rb.build()
+	if rb.msg == "" {
 		resp["message"] = "Error occurred"
-	}
-	if rb.statusMsg != "" {
-		resp["status"] = rb.statusMsg
 	}
 	if rb.detail != "" {
 		resp["detail"] = rb.detail
 	}
 	if err != nil {
 		resp["error"] = err.Error()
-		rb.logtrc.Prt("Response error: %s", rb.msg)
 	}
-	if tid := rb.logtrc.GetTraceID(); tid != "" {
-		resp["trace_id"] = tid
-	}
-	resp["datetime"] = time.Now().Format("2006-01-02T15:04:05-07:00")
 	if rb.printEnabled {
-		rb.logtrc.Prt("Error response sent: %s (status: %d)", rb.msg, rb.status)
+		rb.logtrc.Prt("resp err: %d", rb.status)
 	}
-    rb.gin.JSON(rb.status, resp)
-    return err
+	rb.gin.JSON(rb.status, resp)
+	return err
 }
 
 // Send writes a success JSON response using the configured fields and payload.
 func (rb *SimpleResponseBuilder) Send() {
-    resp := gin.H{}
-    if rb.msg != "" {
-        resp["message"] = rb.msg
-    }
-	if rb.statusMsg != "" {
-		resp["status"] = rb.statusMsg
-	}
+	resp := rb.build()
 	if rb.payload != nil {
 		if rb.msg != "" {
 			resp["data"] = rb.payload
@@ -99,15 +103,8 @@ func (rb *SimpleResponseBuilder) Send() {
 			resp["data"] = rb.payload
 		}
 	}
-	if tid := rb.logtrc.GetTraceID(); tid != "" {
-		resp["trace_id"] = tid
-	}
-	resp["datetime"] = time.Now().Format("2006-01-02T15:04:05-07:00")
 	if rb.printEnabled {
-		rb.logtrc.Prt("Response sent: %s (status: %d)", rb.msg, rb.status)
-	}
-	if rb.msg != "" {
-		rb.logtrc.Prt("Response sent: %s", rb.msg)
+		rb.logtrc.Prt("resp ok: %d", rb.status)
 	}
 	rb.gin.JSON(rb.status, resp)
 }

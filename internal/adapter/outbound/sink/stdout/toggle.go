@@ -17,6 +17,7 @@ type ToggleSink struct {
 func NewToggleSink(inner port.Sink, enabled bool) port.Sink {
 	return &ToggleSink{inner: inner, enabled: enabled}
 }
+
 // Name returns the wrapped sink name or toggle(nil) if inner is nil.
 func (t *ToggleSink) Name() string {
 	if t.inner == nil {
@@ -24,6 +25,7 @@ func (t *ToggleSink) Name() string {
 	}
 	return "toggle(" + t.inner.Name() + ")"
 }
+
 // Configure supports "enabled"=bool and forwards cfg to the inner sink.
 func (t *ToggleSink) Configure(cfg map[string]interface{}) error {
 	if v, ok := cfg["enabled"].(bool); ok {

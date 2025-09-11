@@ -1,13 +1,13 @@
 package shared
 
 import (
-	bufSink "obs-brutal/internal/adapter/outbound/sink/buffered"
-	fileSink "obs-brutal/internal/adapter/outbound/sink/file"
-	netSink "obs-brutal/internal/adapter/outbound/sink/network"
-	stdout "obs-brutal/internal/adapter/outbound/sink/stdout"
-	zlogSink "obs-brutal/internal/adapter/outbound/sink/zerolog"
-	"obs-brutal/internal/core/port"
-	"time"
+    bufSink "obs-brutal/internal/adapter/outbound/sink/buffered"
+    fileSink "obs-brutal/internal/adapter/outbound/sink/file"
+    netSink "obs-brutal/internal/adapter/outbound/sink/network"
+    stdout "obs-brutal/internal/adapter/outbound/sink/stdout"
+    zlogSink "obs-brutal/internal/adapter/outbound/sink/zerolog"
+    "obs-brutal/internal/core/port"
+    "time"
 )
 
 // SinkOption builds a configuration map to pass into sink.Configure
@@ -38,10 +38,14 @@ func (f *Factory) Toggle(inner port.Sink, enabled bool, opts ...SinkOption) port
 	return applyOptions(stdout.NewToggleSink(inner, enabled), opts...)
 }
 func (f *Factory) Buffered(opts ...SinkOption) port.Sink {
-	return applyOptions(bufSink.NewBufferedSink(), opts...)
+    return applyOptions(bufSink.NewBufferedSink(), opts...)
 }
 func (f *Factory) BufferedWith(size int, timeout time.Duration, opts ...SinkOption) port.Sink {
-	return applyOptions(bufSink.NewBufferedSinkWith(size, timeout), opts...)
+    return applyOptions(bufSink.NewBufferedSinkWith(size, timeout), opts...)
+}
+// BufferedWrap wraps an inner sink with a buffer.
+func (f *Factory) BufferedWrap(inner port.Sink, size int, timeout time.Duration, opts ...SinkOption) port.Sink {
+    return applyOptions(bufSink.NewBuf(inner, size, timeout), opts...)
 }
 
 // File sinks
