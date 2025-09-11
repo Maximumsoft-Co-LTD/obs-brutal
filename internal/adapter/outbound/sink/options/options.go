@@ -3,11 +3,11 @@
 package options
 
 import (
-    "fmt"
-    "obs-brutal/internal/core/domain"
-    "obs-brutal/internal/core/port"
-    secsvc "obs-brutal/internal/core/service/security"
-    "reflect"
+	"fmt"
+	"obs-brutal/internal/core/domain"
+	"obs-brutal/internal/core/port"
+	secsvc "obs-brutal/internal/core/service/security"
+	"reflect"
 )
 
 // ===== CONFIGURATION OPTIONS =====
@@ -27,22 +27,22 @@ type ConfigOptions struct {
 	OTelResource       map[string]string
 	MaskingEnabled     bool
 	AsyncEnabled       bool
-    LogLevel           domain.Level
+	LogLevel           domain.Level
 	UseZerolog         bool
 }
 
 // NewConfigOptions creates configuration with sensible defaults.
 func NewConfigOptions() *ConfigOptions {
-    return &ConfigOptions{
-        ServiceName:    "obs-brutal-service",
-        Version:        "1.0.0",
-        Environment:    "production",
-        LogLevel:       domain.InfoLevel,
-        MaskingEnabled: false, // Only when explicitly enabled
-        AsyncEnabled:   false, // Only when explicitly enabled
-        LokiLabels:     map[string]string{},
-        OTelResource:   map[string]string{},
-    }
+	return &ConfigOptions{
+		ServiceName:    "obs-brutal-service",
+		Version:        "1.0.0",
+		Environment:    "production",
+		LogLevel:       domain.InfoLevel,
+		MaskingEnabled: false, // Only when explicitly enabled
+		AsyncEnabled:   false, // Only when explicitly enabled
+		LokiLabels:     map[string]string{},
+		OTelResource:   map[string]string{},
+	}
 }
 
 // ===== OPTION BUILDERS =====
@@ -104,7 +104,9 @@ func Async(enabled bool) ConfigOption {
 }
 
 // LogLevel sets log level
-func LogLevel(level domain.Level) ConfigOption { return func(opts *ConfigOptions) { opts.LogLevel = level } }
+func LogLevel(level domain.Level) ConfigOption {
+	return func(opts *ConfigOptions) { opts.LogLevel = level }
+}
 
 // Zerolog enables zerolog sink usage
 func Zerolog(enabled bool) ConfigOption {
@@ -202,9 +204,9 @@ type ExtractOptions struct{}
 
 // Fields extracts and masks struct fields in one line
 func (e *ExtractOptions) Fields(data interface{}) map[string]interface{} {
-    masker := secsvc.NewPIIMasker()
-    fields := extractStructFieldsAdvanced(data)
-    return masker.MaskFields(fields)
+	masker := secsvc.NewPIIMasker()
+	fields := extractStructFieldsAdvanced(data)
+	return masker.MaskFields(fields)
 }
 
 // extractStructFieldsAdvanced extracts fields with advanced patterns

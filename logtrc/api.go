@@ -5,8 +5,7 @@
 package logtrc
 
 import (
-	"context"
-	"time"
+    "time"
 
 	inboundlog "obs-brutal/internal/adapter/inbound/log"
 	outboundotel "obs-brutal/internal/adapter/outbound/otel"
@@ -14,7 +13,7 @@ import (
 	cfgopts "obs-brutal/internal/adapter/outbound/sink/options"
 	telem "obs-brutal/internal/adapter/outbound/telemetry"
 	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port"
+    "obs-brutal/internal/core/port"
 	service "obs-brutal/internal/core/service"
 	secsvc "obs-brutal/internal/core/service/security"
 	sfactory "obs-brutal/internal/shared"
@@ -45,8 +44,8 @@ type Sink = port.Sink
 // LogTrc combines logging with a minimal response builder for web apps.
 // Obtain it via GetLogTrcFrmGin.
 type LogTrc struct {
-	log LogBrt
-	gin *gin.Context
+    log LogBrt
+    gin *gin.Context
 }
 
 // Prt prints a formatted message using the underlying logger (Info level).
@@ -67,13 +66,13 @@ func (lt *LogTrc) GetTraceID() string {
 
 // R builds a response using the inbound adapter's SimpleResponseBuilder and applies options.
 func (lt *LogTrc) R(status int, opts ...cfgopts.ResponseOption) port.ResponseBuilder {
-	rb := inboundlog.NewSimpleResponseBuilder(lt.gin, lt, status)
-	for _, opt := range opts {
-		if opt != nil {
-			opt(rb)
-		}
-	}
-	return rb
+    rb := inboundlog.NewSimpleResponseBuilder(lt.gin, lt, status)
+    for _, opt := range opts {
+        if opt != nil {
+            opt(rb)
+        }
+    }
+    return rb
 }
 
 // OTelLogBrt is the OpenTelemetry-enabled logger type (re-export).
@@ -154,7 +153,11 @@ func NewOTelWithService(serviceName, version, environment, endpoint string, leve
 
 // NewAsyncLogBrt creates an async logger with the given sinks.
 func NewAsyncLogBrt(level Level, sinks ...Sink) *AsyncLogBrt {
-	return service.NewAsyncLogBrt(level, sinks...)
+    return service.NewAsyncLogBrt(level, sinks...)
+}
+// NewAsyncCfg creates an async logger with custom batch/workers/timeout.
+func NewAsyncCfg(batchSize, workers int, timeout time.Duration, level Level, sinks ...Sink) *AsyncLogBrt {
+    return service.NewAsyncLogBrtCfg(batchSize, workers, timeout, level, sinks...)
 }
 
 // NewSecurityLogBrt creates an OTEL logger with security features enabled
@@ -189,7 +192,11 @@ func NewBufferedSink() Sink { return sinkFactory.Buffered() }
 
 // NewBufferedSinkWith returns a buffered sink with custom size/timeout.
 func NewBufferedSinkWith(size int, timeout time.Duration) Sink {
-	return sinkFactory.BufferedWith(size, timeout)
+    return sinkFactory.BufferedWith(size, timeout)
+}
+// NewBufferedWrap wraps an inner sink with a buffer.
+func NewBufferedWrap(inner Sink, size int, timeout time.Duration) Sink {
+    return sinkFactory.BufferedWrap(inner, size, timeout)
 }
 
 // Advanced sinks
@@ -249,7 +256,7 @@ var (
 
 // Response options factory
 var (
-	Opts = cfgopts.NewResponseOpts()
+    Opts = cfgopts.NewResponseOpts()
 )
 
 // ConfigOption configures the logBrt and integrations.
@@ -260,34 +267,24 @@ type ConfigOption = cfgopts.ConfigOption
 // GetLogTrcFrmGin gets LogTrc from Gin context with options.
 // It auto-binds TraceID/SpanID and connects to the observability stack.
 func GetLogTrcFrmGin(c *gin.Context, operation string, o ...ConfigOption) *LogTrc {
-	// attach operation as a field for convenience
-	base := GetLog(c).F("operation", operation)
-	return &LogTrc{log: base, gin: c}
+    // attach operation as a field for convenience
+    base := GetLog(c).F("operation", operation)
+    return &LogTrc{log: base, gin: c}
 }
 
-// OptsResponse creates response options factory for chainable helpers.
-// Deprecated: use Opts (NewResponseOpts) instead.
-func OptsResponse() *cfgopts.ResponseOpts { return cfgopts.NewResponseOpts() }
-
-// ===== BACKWARD COMPATIBILITY (Optional Modes) =====
-
-// NewWeb creates logBrt optimized for web applications (adds service field).
-func NewWeb(serviceName string) LogBrt {
-	logBrt := New()
-	return logBrt.F("service", serviceName)
-}
+// ===== BACKWARD COMPATIBILITY =====
 
 // ===== GIN INTEGRATION (SIMPLIFIED) =====
 
 // Middleware creates Gin middleware that propagates context and attaches logBrt.
 func Middleware(serviceName string) gin.HandlerFunc {
-	base := NewWeb(serviceName)
-	return gin.HandlerFunc(func(c *gin.Context) {
-		start := time.Now()
-		log := base.
-			Ctx(c.Request.Context()).
-			RequestID(domain.GenerateID("req")).
-			F("method", c.Request.Method).
+    base := New().F("service", serviceName)
+    return gin.HandlerFunc(func(c *gin.Context) {
+        start := time.Now()
+        log := base.
+            Ctx(c.Request.Context()).
+            RequestID(domain.GenerateID("req")).
+            F("method", c.Request.Method).
 			F("path", c.Request.URL.Path).
 			F("ip", c.ClientIP())
 
@@ -326,24 +323,6 @@ func OTelMiddleware(_ *OTelLogBrt) gin.HandlerFunc {
 	return Middleware("otel")
 }
 
-// ===== STRATEGY UTILITIES =====
-
-// CreateLevelFilter creates level-based filter
-func CreateLevelFilter(minLevel, maxLevel Level) service.FilterStrategy {
-	return service.NewLevelFilter(minLevel, maxLevel)
-}
-
-// CreateRateSampler creates rate-based sampler
-func CreateRateSampler(rate float64) service.SamplerStrategy { return service.NewRateSampler(rate) }
-
-// CreateAdaptiveSampler creates adaptive sampler
-func CreateAdaptiveSampler(baseRate, minRate, maxRate float64) service.SamplerStrategy {
-	return service.NewAdaptiveSampler(baseRate, minRate, maxRate)
-}
-
-// CreatePIIMasker creates PII masking strategy
-func CreatePIIMasker() service.MaskingStrategy { return secsvc.NewPIIMaskerStrategy() }
-
 // ===== CORRELATION UTILITIES =====
 
 // Fs extracts and masks fields in one line (replaces ExtractFields)
@@ -357,23 +336,4 @@ func Fs(data interface{}) map[string]interface{} {
 
 // (no helpers currently)
 
-// ===== GLOBAL CONVENIENCE FUNCTIONS =====
-
-var defaultLogBrt = NewDefault()
-
-func Debug(msg string) { defaultLogBrt.Debug(msg) }
-func Info(msg string)  { defaultLogBrt.Info(msg) }
-func Warn(msg string)  { defaultLogBrt.Warn(msg) }
-func Error(msg string) { defaultLogBrt.Error(msg) }
-func Fatal(msg string) { defaultLogBrt.Fatal(msg) }
-
-func Debugf(format string, args ...interface{}) { defaultLogBrt.Debugf(format, args...) }
-func Infof(format string, args ...interface{})  { defaultLogBrt.Infof(format, args...) }
-func Warnf(format string, args ...interface{})  { defaultLogBrt.Warnf(format, args...) }
-func Errorf(format string, args ...interface{}) { defaultLogBrt.Errorf(format, args...) }
-func Fatalf(format string, args ...interface{}) { defaultLogBrt.Fatalf(format, args...) }
-
-func With(key string, value interface{}) LogBrt       { return defaultLogBrt.F(key, value) }
-func WithFields(fields map[string]interface{}) LogBrt { return defaultLogBrt.Fs(fields) }
-func WithError(err error) LogBrt                      { return defaultLogBrt.WithError(err) }
-func WithContext(ctx context.Context) LogBrt          { return defaultLogBrt.Ctx(ctx) }
+// (end facade)

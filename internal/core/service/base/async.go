@@ -74,12 +74,32 @@ func NewAsyncPipeline(batchSize, workerCount int, flushTimeout time.Duration, si
 func (ap *AsyncPipeline) WriteAsync(entry *domain.LogEntry) bool {
     switch ap.policy {
     case DropOldest:
+        // Try fast path enqueue
         select {
         case ap.logChan <- entry:
             return true
         default:
-            select { case <-ap.logChan: ap.dropped.Add(1); default: ap.dropped.Add(1) }
-            select { case ap.logChan <- entry: return true; default: return false }
+            // Queue appears full; drop one oldest if possible
+            droppedOldest := false
+            select {
+            case <-ap.logChan:
+                droppedOldest = true
+            default:
+                // couldn't drop (race or not yet full)
+            }
+            if droppedOldest {
+                ap.dropped.Add(1)
+                // attempt enqueue after making room
+                select {
+                case ap.logChan <- entry:
+                    return true
+                default:
+                    // rare contention: fall through to drop incoming
+                }
+            }
+            // drop the incoming entry
+            ap.dropped.Add(1)
+            return false
         }
     case BlockShort:
         if ap.blockFor <= 0 { ap.blockFor = 10 * time.Millisecond }
@@ -161,6 +181,13 @@ func NewAsyncLogBrt(level domain.Level, sinks ...port.Sink) *AsyncLogBrt {
     return &AsyncLogBrt{UnifiedLogBrt: base, pipeline: pipeline}
 }
 
+// NewAsyncLogBrtCfg constructs an async logger with custom pipeline settings.
+func NewAsyncLogBrtCfg(batchSize, workerCount int, flushTimeout time.Duration, level domain.Level, sinks ...port.Sink) *AsyncLogBrt {
+    pipeline := NewAsyncPipeline(batchSize, workerCount, flushTimeout, sinks...)
+    base := NewUnifiedLogBrt(level)
+    return &AsyncLogBrt{UnifiedLogBrt: base, pipeline: pipeline}
+}
+
 func (al *AsyncLogBrt) log(level domain.Level, msg string) {
     if level < al.Level() { return }
     fields := al.FieldsCopy()
@@ -169,6 +196,7 @@ func (al *AsyncLogBrt) log(level domain.Level, msg string) {
         entry = &domain.LogEntry{Level: level, Msg: msg, Timestamp: time.Now()}
     } else {
         entry = &domain.LogEntry{Level: level, Msg: msg, Timestamp: time.Now(), F: fields}
+        Promote(entry)
     }
     if !al.pipeline.WriteAsync(entry) { al.pipeline.WriteSync(entry) }
     al.IncCount()

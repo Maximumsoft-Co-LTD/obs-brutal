@@ -139,6 +139,10 @@ _ = ch.Configure(map[string]interface{}{
 
 log := logtrc.New(logtrc.LogLevel(logtrc.INFO))
 log.With("sink", stdout.Name()).Info("ok")
+
+// Wrap any sink with a buffer (batching I/O)
+buf := logtrc.NewBufferedWrap(file, 1000, 100*time.Millisecond)
+_ = buf // use in sinks list
 ```
 
 ### Multi-sinks (tee หลายปลายทางพร้อมกัน)
@@ -147,12 +151,24 @@ log.With("sink", stdout.Name()).Info("ok")
 sinks := []logtrc.Sink{
   logtrc.NewConsoleSink(false),
   logtrc.NewLumberjackSink(),
-  logtrc.NewOTLPSink("otel-collector:4317"),
+  // Wrap file with buffer
+  logtrc.NewBufferedWrap(logtrc.NewLumberjackSink(), 2000, 100*time.Millisecond),
   logtrc.NewLokiPushSink("http://loki:3100/loki/api/v1/push", map[string]string{"app":"svc","env":"prod"}),
   logtrc.NewClickHouseSink(),
 }
 log := logtrc.NewAsyncLogBrt(logtrc.INFO, sinks...)
 log.F("module","demo").Info("multi-sinks tee")
+```
+
+Loki advanced config via Configure:
+```go
+lk := logtrc.NewLokiPushSink("http://loki:3100/loki/api/v1/push", nil)
+_ = lk.Configure(map[string]interface{}{
+  "batch_size":   200,
+  "timeout_ms":   100,
+  "max_retries":  3,
+  "retry_base_ms": 100,
+})
 ```
 
 ## ClickHouse (SQL examples)
@@ -408,11 +424,93 @@ go run ./examples/full_demo
 go run ./examples/http
 ```
 
+### Promtail → Loki (tail local logs/)
+
+1) Bring up the stack:
+```bash
+cd compose && docker compose up -d
+```
+
+2) Run the file-logging example (writes JSON lines to `./logs/app.log`):
+```bash
+go run ./examples/promtail_file
+```
+
+3) Open Grafana → Explore → Data source: Loki → Query:
+```
+{job="obs-brutal"}
+```
+You should see the JSON logs shipped via Promtail.
+
+Notes:
+- Promtail tails `../logs` (mounted to `/var/log/app`) with glob `/var/log/app/*.log` (see `compose/promtail-config.yml`).
+- The example uses `NewLumberjackSink` + `NewBufferedWrap` for production‑like file logging.
+
+### Minimal Stack (faster, lower resource)
+
+Use only Loki + Grafana (no Promtail, no Tempo/Jaeger/Collector/Prometheus):
+
+```bash
+cd compose
+docker compose --profile mini up -d  # starts loki + grafana with resource limits
+```
+
+Send logs directly to Loki (no Promtail) in your app:
+
+```go
+lk := logtrc.NewLokiPushSink("http://localhost:3100/loki/api/v1/push", map[string]string{"app":"obs-brutal","env":"dev"})
+log := logtrc.NewAsyncCfg(2000, 4, 100*time.Millisecond, logtrc.INFO, lk)
+log.F("module","mini").Info("hello loki direct")
+```
+
+Open Grafana → Explore → Loki and query by `{app="obs-brutal"}`.
+
+### Quickstart by profiles
+
+- mini (Loki + Grafana only):
+  ```bash
+  cd compose
+  docker compose --profile mini up -d
+  # app side:
+  # use Loki sink directly (see snippet above) and open Grafana at http://localhost:3000
+  ```
+
+- file (Promtail + Loki + Grafana):
+  ```bash
+  cd compose
+  docker compose --profile file up -d
+  # run example that writes to ./logs/
+  go run ./examples/promtail_file
+  # open Grafana -> Explore -> Loki -> query {job="obs-brutal"}
+  ```
+
+- full (all services):
+  ```bash
+  cd compose
+  docker compose --profile full up -d
+  # run any example (e.g., otel_loki) and browse Grafana/Prometheus/Jaeger/Tempo
+  ```
+
 Notes:
 
 - To verify Prometheus metrics: `curl http://localhost:8889/metrics`
 - To test Slack webhook sink, point webhook URL to Wiremock, e.g., `http://localhost:8089/notify`
 - Promtail tails local `logs/` directory (mounted in compose); configure file sink to write under `logs/` to see logs in Loki via Promtail.
+
+## Migration
+
+- Global convenience removed: no more `logtrc.Debug/Info/Warn/Error/Fatal`, `With*`, or `WithContext` globals.
+  - Migrate: create an instance and use fluent API.
+    - `log := logtrc.NewDefault(); log.Info("msg")`
+    - or `log := logtrc.New(logtrc.Async(true))`
+- Strategy helpers removed from facade: no more `logtrc.CreateLevelFilter/RateSampler/AdaptiveSampler/PIIMasker`.
+  - Migrate: use core services directly.
+    - `service.NewLevelFilter(...)`, `service.NewRateSampler(...)`, `service.NewAdaptiveSampler(...)`, `security.NewPIIMaskerStrategy()`
+- Buffered sink wrapper: prefer `logtrc.NewBufferedWrap(inner, size, timeout)` to batch any sink.
+- Loki sink now supports batching/retry via `Configure` (keys: `batch_size`, `timeout_ms`, `max_retries`, `retry_base_ms`).
+- Timestamps: JSON output uses `RFC3339Nano` for higher precision.
+- Async DropOldest: fixed to truly drop the oldest when queue is full; counters now accurate.
+- IDs promoted: `trace_id/span_id/request_id/user_id/module/tenant_id` are promoted to top-level JSON fields.
 
 ## Performance Tuning
 

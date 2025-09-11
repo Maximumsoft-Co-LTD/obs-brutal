@@ -1,11 +1,12 @@
 package util
 
 import (
-	"bytes"
-	"encoding/json"
-	"io"
-	"sort"
-	"strconv"
+    "bytes"
+    "encoding/json"
+    "io"
+    "sort"
+    "strconv"
+    "time"
 
 	"obs-brutal/internal/core/domain"
 )
@@ -27,8 +28,8 @@ func WriteJSONToWriter(w io.Writer, entry *domain.LogEntry) error {
 		buf.Write(b)
 		return nil
 	}
-	isFirst := true
-	_ = writeKV("datetime", entry.Timestamp.Format("2006-01-02T15:04:05-07:00"), &isFirst)
+    isFirst := true
+    _ = writeKV("datetime", entry.Timestamp.Format(time.RFC3339Nano), &isFirst)
 	_ = writeKV("level", entry.Level.String(), &isFirst)
 	_ = writeKV("msg", entry.Msg, &isFirst)
 	if entry.TraceID != "" {

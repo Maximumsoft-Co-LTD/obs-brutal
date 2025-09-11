@@ -18,7 +18,7 @@ func Example_asyncWithOTel() {
 }
 
 // Example to extract OTEL-aware logger from Gin (compile-only snippet)
-func Example_OTelLogger() {
+func Example_otel() {
     var ctx context.Context
     _ = ctx
 }
@@ -48,6 +48,5 @@ func Example_methods() {
     // rb := GetLogTrcFrmGin(c, "op").R(200, Opts.Msg("ok"))
     // rb.Send()
 
-    // Convenience functions
-    Debug("d"); Info("i"); Warn("w"); Error("e")
+    // Convenience globals removed; use instance loggers instead.
 }

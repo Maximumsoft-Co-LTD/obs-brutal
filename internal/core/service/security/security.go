@@ -1,10 +1,10 @@
 package security
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"context"
 	"reflect"
 	"regexp"
 	"strings"
@@ -421,7 +421,7 @@ func (acm *AccessControlManager) isPIIField(name string) bool {
 
 // ===== SECURITY LOGGER =====
 
-	type SecurityLogBrt struct {
+type SecurityLogBrt struct {
 	*svc.OTelLogBrt
 	piiMasker       *PIIMasker
 	accessControl   *AccessControlManager
@@ -432,35 +432,47 @@ func (acm *AccessControlManager) isPIIField(name string) bool {
 // NewSecurityLogBrt constructs a security logger with a no-op telemetry provider (core-only path).
 // For production, prefer constructing an OTEL provider in adapter and calling NewSecurityLogBrtWithOTel.
 func NewSecurityLogBrt(serviceName, version, environment, endpoint string, level domain.Level, sinks ...port.Sink) (*SecurityLogBrt, error) {
-    ot := svc.NewOTelLogBrtWithProvider(noopTP{}, level, sinks...)
-    return NewSecurityLogBrtWithOTel(ot)
+	ot := svc.NewOTelLogBrtWithProvider(noopTP{}, level, sinks...)
+	return NewSecurityLogBrtWithOTel(ot)
 }
 
 // noop TelemetryProvider for core-only construction
 type noopTP struct{}
-func (noopTP) Tracer() port.Tracer                                 { return noopTracer{} }
-func (noopTP) Meter() port.Meter                                   { return noopMeter{} }
-func (noopTP) Propagator() port.Propagator                         { return noopProp{} }
-func (noopTP) ExtractTraceInfo(ctx context.Context) (string,string){ return "","" }
+
+func (noopTP) Tracer() port.Tracer                                                                 { return noopTracer{} }
+func (noopTP) Meter() port.Meter                                                                   { return noopMeter{} }
+func (noopTP) Propagator() port.Propagator                                                         { return noopProp{} }
+func (noopTP) ExtractTraceInfo(ctx context.Context) (string, string)                               { return "", "" }
 func (noopTP) RecordLog(ctx context.Context, _ domain.Level, _ time.Duration, _ map[string]string) {}
-func (noopTP) Shutdown(ctx context.Context) error                  { return nil }
+func (noopTP) Shutdown(ctx context.Context) error                                                  { return nil }
+
 type noopTracer struct{}
-func (noopTracer) StartSpan(ctx context.Context, name string, options ...any) (context.Context, any) { return ctx, nil }
+
+func (noopTracer) StartSpan(ctx context.Context, name string, options ...any) (context.Context, any) {
+	return ctx, nil
+}
+
 type noopMeter struct{}
+
 func (noopMeter) IncCounter(ctx context.Context, name string, labels map[string]string) {}
-func (noopMeter) ObserveHistogram(ctx context.Context, name string, value float64, labels map[string]string) {}
+func (noopMeter) ObserveHistogram(ctx context.Context, name string, value float64, labels map[string]string) {
+}
+
 type noopProp struct{}
+
 func (noopProp) Inject(ctx context.Context, carrier any)                  {}
 func (noopProp) Extract(ctx context.Context, carrier any) context.Context { return ctx }
 
 // NewSecurityLogBrtWithOTel composes security features over an existing OTel logger
 func NewSecurityLogBrtWithOTel(ot *svc.OTelLogBrt) (*SecurityLogBrt, error) {
-    if ot == nil { return nil, errors.New("nil OTelLogBrt") }
-    pm := NewPIIMasker()
-    ac := NewAccessControlManager()
-    at := NewAuditTrail(10000)
-    ot.AddMasker(maskingAdapter{pm})
-    return &SecurityLogBrt{OTelLogBrt: ot, piiMasker: pm, accessControl: ac, auditTrail: at, securityEnabled: true}, nil
+	if ot == nil {
+		return nil, errors.New("nil OTelLogBrt")
+	}
+	pm := NewPIIMasker()
+	ac := NewAccessControlManager()
+	at := NewAuditTrail(10000)
+	ot.AddMasker(maskingAdapter{pm})
+	return &SecurityLogBrt{OTelLogBrt: ot, piiMasker: pm, accessControl: ac, auditTrail: at, securityEnabled: true}, nil
 }
 
 func (el *SecurityLogBrt) LogWithSecurity(level domain.Level, msg, userID, userRole string, isAuthenticated bool) {
@@ -469,9 +481,9 @@ func (el *SecurityLogBrt) LogWithSecurity(level domain.Level, msg, userID, userR
 		return
 	}
 	traceID, spanID := "", ""
-    if ctx := el.OTelLogBrt.Context(); ctx != nil && el.OTelLogBrt.GetTelemetryProvider() != nil {
-        traceID, spanID = el.OTelLogBrt.GetTelemetryProvider().ExtractTraceInfo(ctx)
-    }
+	if ctx := el.OTelLogBrt.Context(); ctx != nil && el.OTelLogBrt.GetTelemetryProvider() != nil {
+		traceID, spanID = el.OTelLogBrt.GetTelemetryProvider().ExtractTraceInfo(ctx)
+	}
 	original := el.OTelLogBrt.FieldsCopy()
 	filtered := el.accessControl.FilterFieldsByAccess(original, userRole, isAuthenticated, el.auditTrail, userID, traceID, spanID)
 	sec := el.OTelLogBrt.WithOnlyFields(filtered)

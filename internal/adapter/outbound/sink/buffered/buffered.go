@@ -1,10 +1,9 @@
 package buffered
 
 import (
+	stdout "obs-brutal/internal/adapter/outbound/sink/stdout"
 	"obs-brutal/internal/core/domain"
 	"obs-brutal/internal/core/port"
-	"obs-brutal/internal/util"
-	"os"
 	"sync"
 	"time"
 )
@@ -18,11 +17,22 @@ type BufferedSink struct {
 	mu        sync.Mutex
 	stopCh    chan struct{}
 	wg        sync.WaitGroup
+	inner     port.Sink
 }
 
 func NewBufferedSink() port.Sink { return NewBufferedSinkWith(1000, 100*time.Millisecond) }
 func NewBufferedSinkWith(size int, timeout time.Duration) port.Sink {
-	s := &BufferedSink{buffer: make([]*domain.LogEntry, 0, size), maxSize: size, timeout: timeout}
+	s := &BufferedSink{buffer: make([]*domain.LogEntry, 0, size), maxSize: size, timeout: timeout, inner: stdout.NewFastStdoutSink()}
+	s.startFlusher()
+	return s
+}
+
+// NewBuf creates a buffered wrapper over the provided inner sink.
+func NewBuf(inner port.Sink, size int, timeout time.Duration) port.Sink {
+	if inner == nil {
+		inner = stdout.NewFastStdoutSink()
+	}
+	s := &BufferedSink{buffer: make([]*domain.LogEntry, 0, size), maxSize: size, timeout: timeout, inner: inner}
 	s.startFlusher()
 	return s
 }
@@ -48,11 +58,22 @@ func (s *BufferedSink) Close() error {
 	s.wg.Wait()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.flushLocked()
+	if err := s.flushLocked(); err != nil {
+		return err
+	}
+	if s.inner != nil {
+		_ = s.inner.Close()
+	}
+	return nil
 }
 func (s *BufferedSink) flushLocked() error {
+	if s.inner == nil {
+		s.buffer = s.buffer[:0]
+		s.lastFlush = time.Now()
+		return nil
+	}
 	for _, e := range s.buffer {
-		_ = util.WriteJSONToWriter(os.Stdout, e)
+		_ = s.inner.Write(e)
 	}
 	s.buffer = s.buffer[:0]
 	s.lastFlush = time.Now()

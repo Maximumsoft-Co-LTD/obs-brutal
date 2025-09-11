@@ -29,6 +29,10 @@ func NewUnifiedLogBrt(level domain.Level, sinks ...port.Sink) *UnifiedLogBrt {
 func NewAsyncLogBrt(level domain.Level, sinks ...port.Sink) *AsyncLogBrt {
     return b.NewAsyncLogBrt(level, sinks...)
 }
+// NewAsyncLogBrtCfg constructs an async logger with custom pipeline settings.
+func NewAsyncLogBrtCfg(batchSize, workerCount int, flushTimeout time.Duration, level domain.Level, sinks ...port.Sink) *AsyncLogBrt {
+    return b.NewAsyncLogBrtCfg(batchSize, workerCount, flushTimeout, level, sinks...)
+}
 // NewAsyncPipeline constructs an async pipeline with custom settings.
 func NewAsyncPipeline(batchSize, workerCount int, flushTimeout time.Duration, sinks ...port.Sink) *AsyncPipeline {
     return b.NewAsyncPipeline(batchSize, workerCount, flushTimeout, sinks...)

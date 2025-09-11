@@ -14,6 +14,7 @@ scrape_configs:
       - targets: [localhost]
         labels:
           job: obs-brutal
+          app: obs-brutal
+          env: dev
           __path__: /var/log/app/*.log
-
 
