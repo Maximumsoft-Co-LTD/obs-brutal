@@ -1,0 +1,17 @@
+# Rule: Git workflow by default
+
+For every task that writes to `.git` — creating a branch, staging a commit, writing a commit message, rebasing, merging, force-pushing, opening or updating a PR, or reaching for `git reset --hard` / `git push --force` / `git checkout --` to "clean things up" — invoke the `git-workflow` skill **before** running the command.
+
+This rule is the always-on pointer. The 7 principles (fresh-base branching → atomic commits → why-carrying messages → local-vs-shared history → integrate-often → PR as the unit of review → recover with reflog before destroying), pre-flight checklist, and deep-dive guides on commit messages, branching/rebasing, pull requests, and recovery all live in the skill:
+
+- `.claude/skills/git-workflow/SKILL.md`
+
+**Why:** Git is the joint between your work and everyone else's, and almost every "lost my changes," "force-pushed over a teammate," "the branch went sideways," or "we can't tell what this PR does" story traces back to the same handful of missed fundamentals — a branch that grew five purposes, a commit message that said "fixes" and nothing else, a rebase of a published branch, a `git reset --hard` reached for before `git reflog`. Catching these at write time costs seconds; catching them in a postmortem costs a teammate's afternoon, a lost commit, or a PR that nobody can actually review.
+
+**How to apply:** At the start of any non-trivial git action, load the `git-workflow` skill and run the 7-principle pre-flight (base → atomicity → message → history scope → freshness → reviewability → recoverability). Apply the relevant reference file when the work is concentrated in one area (drafting a commit message → `references/commit-messages.md`; rebasing or merging → `references/branching-and-rebasing.md`; opening or reviewing a PR → `references/pull-requests.md`; the words "I lost my…" or any destructive command → `references/recovery.md`). The skill itself lists when to skip (read-only `git status` / `git log` / `git diff`, simple `git pull` on a clean branch) — defer to it rather than re-deciding here.
+
+**Relation to other skills:** Git workflow is the *delivery channel* for the construction skills, not a competitor. It composes with [[programming-fundamentals]] (atomic commits are the runtime cousin of "one function, one thing" — same discipline, different unit), [[database-fundamentals]] (migrations land via commits and PRs; expand → backfill → contract is a *sequence of commits*), [[debug-fundamentals]] (`git bisect` only works because the commits are atomic — the construction-time skill makes this skill effective), [[hexagonal-backend]] (layer-crossing features want one PR per layer in a stack), and [[queue-fundamentals]] (outbox migrations and consumer rewrites want their own atomic commits and an explicit rollout note in the PR). Run order when multiple apply: the construction skill decides *what* to write; this skill decides *how to commit, branch, and ship* what you wrote.
+
+This rule also pairs tightly with the `/dev` workflow in this repository — the workflow's ship phase (step 9) produces a commit and (optionally) a PR, and the commit `<type>` mirrors the spec's `Type:` slot (`feat | fix | refactor | chore | docs | spike`). Apply this skill at that step so the commit message and PR description carry the *why* the spec captured, not just a paraphrase of the diff.
+
+**Status:** Active. Applies to all git-touching work in this project and any project that adopts this foundation.

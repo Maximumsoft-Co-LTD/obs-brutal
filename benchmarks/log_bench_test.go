@@ -1,48 +1,70 @@
 package benchmarks
 
 import (
-	"runtime"
-	"sync"
+	"context"
+	"errors"
 	"testing"
 
-	"obs-brutal/logtrc"
+	"obs-brutal/boeng"
 )
 
-func BenchmarkLogging(b *testing.B) {
-	// Silence info output for fair measurement
-	log := logtrc.New(logtrc.LogLevel(logtrc.WARN))
+func init() {
+	boeng.Init(boeng.Config{Service: "bench", Level: boeng.WarnLevel})
+}
+
+// BenchmarkRun measures the cost of wrapping a no-op closure with the full
+// pipeline (span, log, metrics, panic recovery).
+func BenchmarkRun(b *testing.B) {
+	ctx := context.Background()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		log.F("i", i).Info("bench")
+		_ = boeng.Run(ctx, "noop", nil, func(ctx context.Context) error {
+			return nil
+		})
 	}
 }
 
-func BenchmarkLoggingParallel(b *testing.B) {
-	log := logtrc.New(logtrc.LogLevel(logtrc.WARN))
-	b.ReportAllocs()
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			log.F("k", 1).Info("benchp")
-		}
-	})
-}
-
-func BenchmarkLoggingGoroutines(b *testing.B) {
-	log := logtrc.New(logtrc.LogLevel(logtrc.WARN))
-	workers := runtime.NumCPU()
-	perWorker := b.N / workers
-	var wg sync.WaitGroup
-	wg.Add(workers)
+// BenchmarkRunWithSubject adds the cost of reflection over a struct
+// subject (skipping zero values, snake_case naming, sensitive-key check).
+func BenchmarkRunWithSubject(b *testing.B) {
+	ctx := context.Background()
+	subj := struct {
+		UserID string
+		Tier   string
+		Plan   string
+	}{"u-1", "premium", "annual"}
 	b.ReportAllocs()
 	b.ResetTimer()
-	for w := 0; w < workers; w++ {
-		go func() {
-			defer wg.Done()
-			for i := 0; i < perWorker; i++ {
-				log.F("w", w).Info("benchg")
-			}
-		}()
+	for i := 0; i < b.N; i++ {
+		_ = boeng.Run(ctx, "with_subject", subj, func(ctx context.Context) error {
+			return nil
+		})
 	}
-	wg.Wait()
+}
+
+// BenchmarkRunErrorPath shows the cost when fn returns an error — span
+// gets RecordError, completion log goes to ERROR, _error_total bumps.
+func BenchmarkRunErrorPath(b *testing.B) {
+	ctx := context.Background()
+	want := errors.New("expected")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = boeng.Run(ctx, "err_op", nil, func(ctx context.Context) error {
+			return want
+		})
+	}
+}
+
+// BenchmarkEnterStep mirrors the legacy/imperative usage pattern.
+func BenchmarkEnterStep(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		op := boeng.Enter("bench_op")
+		_ = op.Step("phase_a", func() error { return nil })
+		_ = op.Step("phase_b", func() error { return nil })
+		op.Close()
+	}
 }

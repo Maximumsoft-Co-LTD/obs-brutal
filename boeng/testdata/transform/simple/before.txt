@@ -1,0 +1,5 @@
+package svc
+
+func CreateUser(user User) error {
+	return repo.Create(user)
+}

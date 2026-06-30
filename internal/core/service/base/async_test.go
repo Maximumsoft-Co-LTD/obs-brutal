@@ -11,7 +11,7 @@ import (
 func TestAsync_DropOldest(t *testing.T) {
 	// batchSize=1 → queue cap = batchSize*4 = 4; no workers; no flush
 	ap := NewAsyncPipeline(1, 0, time.Hour)
-	ap.policy = DropOldest
+	ap.policy.Store(int32(DropOldest))
 
 	mk := func(i int) *domain.LogEntry {
 		return &domain.LogEntry{Level: domain.InfoLevel, Msg: "x", Timestamp: time.Now()}

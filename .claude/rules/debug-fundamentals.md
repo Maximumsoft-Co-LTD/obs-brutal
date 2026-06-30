@@ -1,0 +1,15 @@
+# Rule: Debug fundamentals by default
+
+For every task that involves diagnosing an unknown-cause failure — a bug, crash, regression, flaky test, performance cliff, unexpected production behavior, or any "this used to work" — invoke the `debug-fundamentals` skill **before** changing code, adding try/catch, or "trying things to see what happens."
+
+This rule is the always-on pointer. The 7 principles (reproduce → read evidence → facts vs assumptions → bisect → one change at a time → right layer → cause + regression test), pre-flight checklist, and deep-dive guides on reproduction, bisection, instrumentation, and distributed-system debugging all live in the skill:
+
+- `.claude/skills/debug-fundamentals/SKILL.md`
+
+**Why:** Most days of lost engineering time are debugging time, and most of that loss is the same handful of skipped fundamentals — patching a symptom because the cause was never reproduced, reading the first line of a stack trace and guessing the rest, changing five things at once so no observation is informative, "fixing" the layer where the bug surfaced instead of the layer where the data turned wrong, and shipping the fix without a test that pins the bug from coming back. Catching these at the start of a debug session costs minutes; skipping them costs days, repeat incidents, and lost trust with the user who reported the bug.
+
+**How to apply:** At the start of any debugging task — even one that looks small — load the `debug-fundamentals` skill and run the 7-principle pre-flight (repro → evidence → facts vs assumptions → bisect → one variable → right layer → fix + test). Apply the relevant reference file when the work concentrates in one area (can't repro → `references/reproduction.md`; "when did it break" or large search space → `references/bisection.md`; the code "isn't saying what it's doing" → `references/instrumentation.md`; the bug crosses services or involves a queue → `references/distributed-debugging.md`). The skill itself lists when to skip (one-line typo with the cause already on the screen, pure greenfield feature work, trivial reversible config edits) — defer to it rather than re-deciding here.
+
+**Relation to other skills:** Debug fundamentals are the *recovery* sibling to the construction-time fundamentals. They compose with [[programming-fundamentals]] (the layer below — most bugs come from violations of those, and most real fixes apply one of those principles), [[database-fundamentals]] (bugs that cross into persistent state — data corruption, lost updates, deadlocks, slow queries, broken migrations), [[hexagonal-backend]] (bugs at adapter boundaries; the fix often means moving a side effect to the right layer), and [[queue-fundamentals]] (the dominant production-debug shape — duplicate delivery, lost messages, ordering, retry storms). Run order: use this skill *first* to find the actual cause, then the construction skill that owns the fix layer. Skipping straight to "the fix" before this skill has nailed the cause is exactly the failure mode this rule exists to prevent.
+
+**Status:** Active. Applies to all debugging work in this project and any project that adopts this foundation.

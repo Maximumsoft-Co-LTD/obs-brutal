@@ -1,0 +1,9 @@
+package svc
+
+import "obs-brutal/boeng"
+
+func CreateUser(user User) error {
+	op := boeng.Enter("create_user", user)
+	defer op.Close()
+	return repo.Create(user)
+}

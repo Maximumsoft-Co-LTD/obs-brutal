@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Run the boeng demo examples in the background and dump their stdout/stderr
+# under logs/<name>.{out,err}. Useful for eyeballing JSON output shape and
+# verifying that the binary actually flushes async sinks on Close.
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
@@ -15,19 +18,15 @@ mkdir -p "$ROOT_DIR/logs"
 
 declare -A pids
 
-# Start examples (non-blocking)
-pids[otel_loki]=$(run_bg otel_loki "go run ./examples/otel_loki")
-pids[http]=$(run_bg http "go run ./examples/http")
-pids[gin]=$(run_bg gin "go run ./examples/gin")
-pids[mongo]=$(run_bg mongo "go run ./examples/mongo")
-pids[redis]=$(run_bg redis "go run ./examples/redis")
-pids[amqp]=$(run_bg amqp "go run ./examples/amqp")
-pids[basic]=$(run_bg basic "go run ./examples/basic")
-pids[cron]=$(run_bg cron "go run ./examples/cron")
+# Start the three boeng usage modes (non-blocking)
+pids[boeng]=$(run_bg boeng "go run ./examples/boeng")
+pids[boeng_ctx]=$(run_bg boeng_ctx "go run ./examples/boeng_ctx")
+pids[boeng_legacy]=$(run_bg boeng_legacy "go run ./examples/boeng_legacy")
 
 sleep 5
 
-echo "\nSUMMARY:" >&2
+echo "" >&2
+echo "SUMMARY:" >&2
 for name in "${!pids[@]}"; do
   pid=${pids[$name]}
   if ps -p "$pid" > /dev/null 2>&1; then
@@ -38,4 +37,3 @@ for name in "${!pids[@]}"; do
 done
 
 echo "Done (logs under logs/)." >&2
-
