@@ -1,64 +1,46 @@
+// net/http adapter demo. Shows BOTH the server middleware and the
+// client RoundTripper. The client makes a request to the same server,
+// which means the trace context is propagated end-to-end through the
+// HTTP headers (W3C traceparent).
+//
+// Run: go run ./examples/http
+//
+// The server log lines and the client log lines for one round-trip will
+// share the same trace_id.
 package main
 
 import (
-    "context"
-    "net/http"
-    "os"
-    "os/signal"
-    "syscall"
-    "time"
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
 
-    "obs-brutal/internal/util"
-    "obs-brutal/logtrc"
-
-    "github.com/gin-gonic/gin"
+	"obs-brutal/boeng"
+	boenghttp "obs-brutal/boeng/http"
 )
 
 func main() {
-	r := gin.New()
-	// /metrics (Prometheus) via OTEL provider
-    if _, prov, err := logtrc.NewOTelWithService("example-http", "1.0.0", "dev", "localhost:4317", logtrc.INFO); err == nil {
-        // ลงทะเบียน /metrics ด้วย Prometheus handler
-        r.GET("/metrics", gin.WrapH(prov.PrometheusHandler()))
-    }
+	defer boeng.Init(boeng.Config{Service: "http_demo", Env: "dev"}).Close()
 
-	// Basic middleware attaching a per-request logbrut
-	r.Use(logtrc.Middleware("example-http"))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/users/", boenghttp.Wrap("get_user", func(w http.ResponseWriter, r *http.Request) {
+		boeng.L(r.Context()).Info("inside handler")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
 
-    r.GET("/health", func(c *gin.Context) {
-        // demonstrate type-safe context keys
-        ctx := util.WithTraceID(c.Request.Context(), "demo-trace-id")
-        log := logtrc.GetLog(c).Ctx(ctx)
-        log.F("environment", "dev").Info("health check")
-        c.JSON(http.StatusOK, gin.H{"status": "ok"})
-    })
+	server := &http.Server{Addr: ":8081", Handler: boenghttp.Middleware(mux)}
+	go func() { _ = server.ListenAndServe() }()
+	defer server.Shutdown(context.Background())
+	time.Sleep(200 * time.Millisecond)
 
-	r.GET("/users/:id", func(c *gin.Context) {
-		log := logtrc.GetLog(c).F("route", "/users/:id")
-		id := c.Param("id")
-		// simulate lookup
-		time.Sleep(20 * time.Millisecond)
-		log.F("user_id", id).Info("fetch user")
-		c.JSON(http.StatusOK, gin.H{"id": id, "name": "demo"})
-	})
-
-	r.POST("/orders", func(c *gin.Context) {
-		ltrace := logtrc.GetLogTrcFrmGin(c, "create_order")
-		// pretend to process
-		time.Sleep(15 * time.Millisecond)
-		ltrace.Prt("order created")
-		ltrace.R(http.StatusCreated, logtrc.Opts.Msg("created"), logtrc.Opts.Body(gin.H{"order_id": "o_123"})).Send()
-	})
-
-	srv := &http.Server{Addr: ":8081", Handler: r}
-	go func() { _ = srv.ListenAndServe() }()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = srv.Shutdown(ctx)
-    // Provider shutdown is handled by adapter user if needed
+	client := &http.Client{Transport: boenghttp.Transport(nil)}
+	resp, err := client.Get("http://localhost:8081/users/u-7")
+	if err != nil {
+		fmt.Println("client err:", err)
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	fmt.Println("client got:", string(body))
 }

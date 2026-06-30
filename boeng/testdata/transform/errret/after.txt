@@ -1,0 +1,16 @@
+package svc
+
+import (
+	"context"
+
+	"obs-brutal/boeng"
+)
+
+func ChargeCard(ctx context.Context, card Card, amount int) (err error) {
+	ctx, op := boeng.EnterCtx(ctx, "charge_card", card)
+	defer op.CloseWith(&err)
+	if amount <= 0 {
+		return ErrInvalidAmount
+	}
+	return processor.Charge(ctx, card, amount)
+}

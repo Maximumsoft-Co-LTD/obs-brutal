@@ -4,7 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	mathrand "math/rand"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -122,6 +124,8 @@ type FilterRule struct {
 
 // ===== ENHANCED UTILITY FUNCTIONS =====
 
+var fallbackRandSeed sync.Once
+
 // GenerateID creates efficient IDs using Go 1.25 optimizations
 func GenerateID(prefix string) string {
 	// Use timestamp + random for uniqueness and performance
@@ -129,8 +133,15 @@ func GenerateID(prefix string) string {
 
 	// Generate 4 random bytes
 	randomBytes := make([]byte, 4)
-	rand.Read(randomBytes)
-	randomHex := hex.EncodeToString(randomBytes)
+	randomHex := ""
+	if _, err := rand.Read(randomBytes); err == nil {
+		randomHex = hex.EncodeToString(randomBytes)
+	} else {
+		fallbackRandSeed.Do(func() {
+			mathrand.Seed(time.Now().UnixNano())
+		})
+		randomHex = fmt.Sprintf("%08x", mathrand.Int63()&0xffffffff)
+	}
 
 	return fmt.Sprintf("%s_%d_%s", prefix, timestamp&0xFFFFFFFF, randomHex)
 }

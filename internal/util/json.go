@@ -1,12 +1,12 @@
 package util
 
 import (
-    "bytes"
-    "encoding/json"
-    "io"
-    "sort"
-    "strconv"
-    "time"
+	"bytes"
+	"encoding/json"
+	"io"
+	"sort"
+	"strconv"
+	"time"
 
 	"obs-brutal/internal/core/domain"
 )
@@ -28,20 +28,47 @@ func WriteJSONToWriter(w io.Writer, entry *domain.LogEntry) error {
 		buf.Write(b)
 		return nil
 	}
-    isFirst := true
-    _ = writeKV("datetime", entry.Timestamp.Format(time.RFC3339Nano), &isFirst)
-	_ = writeKV("level", entry.Level.String(), &isFirst)
-	_ = writeKV("msg", entry.Msg, &isFirst)
+	isFirst := true
+	if err := writeKV("datetime", entry.Timestamp.Format(time.RFC3339Nano), &isFirst); err != nil {
+		return err
+	}
+	if err := writeKV("level", entry.Level.String(), &isFirst); err != nil {
+		return err
+	}
+	if err := writeKV("msg", entry.Msg, &isFirst); err != nil {
+		return err
+	}
 	if entry.TraceID != "" {
-		_ = writeKV("trace_id", entry.TraceID, &isFirst)
+		if err := writeKV("trace_id", entry.TraceID, &isFirst); err != nil {
+			return err
+		}
 	}
 	if entry.SpanID != "" {
-		_ = writeKV("span_id", entry.SpanID, &isFirst)
+		if err := writeKV("span_id", entry.SpanID, &isFirst); err != nil {
+			return err
+		}
 	}
 	if entry.RequestID != "" {
-		_ = writeKV("request_id", entry.RequestID, &isFirst)
+		if err := writeKV("request_id", entry.RequestID, &isFirst); err != nil {
+			return err
+		}
 	}
-	reserved := map[string]struct{}{"datetime": {}, "level": {}, "msg": {}, "trace_id": {}, "span_id": {}, "request_id": {}, "context": {}}
+	if entry.UserID != "" {
+		if err := writeKV("user_id", entry.UserID, &isFirst); err != nil {
+			return err
+		}
+	}
+	if entry.Mod != "" {
+		if err := writeKV("module", entry.Mod, &isFirst); err != nil {
+			return err
+		}
+	}
+	if entry.TenantID != "" {
+		if err := writeKV("tenant_id", entry.TenantID, &isFirst); err != nil {
+			return err
+		}
+	}
+	reserved := map[string]struct{}{"datetime": {}, "level": {}, "msg": {}, "trace_id": {}, "span_id": {}, "request_id": {}, "user_id": {}, "module": {}, "tenant_id": {}, "context": {}}
 	keys := make([]string, 0, len(entry.F))
 	for k := range entry.F {
 		if _, ok := reserved[k]; ok {
@@ -51,7 +78,9 @@ func WriteJSONToWriter(w io.Writer, entry *domain.LogEntry) error {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		_ = writeKV(k, entry.F[k], &isFirst)
+		if err := writeKV(k, entry.F[k], &isFirst); err != nil {
+			return err
+		}
 	}
 	buf.WriteByte('}')
 	buf.WriteByte('\n')

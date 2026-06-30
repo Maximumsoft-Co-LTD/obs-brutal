@@ -1,145 +1,84 @@
-# Architecture (Hexagonal)
+# obs-brutal documentation index
 
-## Layout
+This file is the navigation spine for everything in this repository.
+Start here, load only the leaf doc you need.
 
-```
-internal/
-  core/
-    domain/          # Domain models (LogEntry, Level)
-    port/            # Ports (interfaces) – Sink, TelemetryProvider, strategies
-    service/         # Application services (Unified/Async/Strategy/Security + OTEL logger orchestrator)
-      base/          # Unified/Async loggers (pure core)
-      strategy/      # Strategy manager + built-in strategies
-      security/      # PII masking, audit trail, access control
-      otel_logger.go # OTEL-enabled logger (uses port.TelemetryProvider)
-  adapter/
-    inbound/         # HTTP (Gin) response helpers
-    outbound/
-      otel/          # OTEL provider (Tracer/Meter) + wiring helpers
-      sink/*         # stdout/json/file/lumberjack/buffered/loki/alerts/...
+## Reading paths
 
-logtrc/              # Public facade API (constructors + helpers)
-examples/            # runnable examples
-compose/             # observability stack
-```
+| If you are…                              | Start with                                                |
+| ---------------------------------------- | --------------------------------------------------------- |
+| A new user adopting boeng                | [`../README.md`](../README.md) → [`../boeng/README.md`](../boeng/README.md) |
+| Asking "what will I actually see in logs / traces / metrics?" | [`walkthrough.md`](./walkthrough.md) — 8 scenarios with real captured output |
+| An AI coding agent editing this repo     | [`../CLAUDE.md`](../CLAUDE.md) → [`ai/guardrails.md`](./ai/guardrails.md) |
+| Curious about the mental model           | [`../ARCHITECTURE.md`](../ARCHITECTURE.md)                |
+| Worried about backwards compatibility    | [`../COMPATIBILITY.md`](../COMPATIBILITY.md)              |
+| Tracking what changed between releases   | [`../CHANGELOG.md`](../CHANGELOG.md)                      |
+| Investigating a failing test             | [`testing.md`](./testing.md)                              |
+| Tuning observability / SLOs              | [`../boeng/README.md`](../boeng/README.md) Metrics + Cardinality sections |
 
-## Dependency Direction
+## Canonical documents
 
-```
-   Ports ← Service → Adapters
-     ^        ^          ^
-     |        |          |
-   Domain ────┴──────────┘
-```
+| Document                                       | Purpose                                                  |
+| ---------------------------------------------- | -------------------------------------------------------- |
+| [`../README.md`](../README.md)                 | Product framing, four verbs, supported Go, examples list |
+| [`../boeng/README.md`](../boeng/README.md)     | Full API surface, Loggable contract, runtime guarantees G1–G7, test pyramid |
+| [`../boeng/doc.go`](../boeng/doc.go)           | Package godoc — read by `go doc obs-brutal/boeng`        |
+| [`../ARCHITECTURE.md`](../ARCHITECTURE.md)     | One-diagram mental model: Business → Operation → Pipeline → Outputs |
+| [`../COMPATIBILITY.md`](../COMPATIBILITY.md)   | v1.x semver policy: what counts as breaking, deprecation rules |
+| [`../CHANGELOG.md`](../CHANGELOG.md)           | Release history, breaking changes, test pyramid additions |
+| [`../CLAUDE.md`](../CLAUDE.md)                 | AI-assistant entry point — required reading order        |
+| [`walkthrough.md`](./walkthrough.md)           | 8 scenarios that answer "If I write this code, what exactly will I see in Trace, Log, and Metrics?" — every JSON line is verified against runtime by `boeng/walkthrough_test.go` |
+| [`testing.md`](./testing.md)                   | All test layers, what each proves, how to run them       |
+| [`ai/guardrails.md`](./ai/guardrails.md)       | DO / DO NOT rules for AI agents producing Go code        |
 
-- Domain: pure types (`LogEntry`, `Level`)
-- Port: Sink/TelemetryProvider/Strategy interfaces
-- Service: logbrut core (Unified/Async), strategy manager + built-ins, OTEL logger orchestrator; depends only on Port/Domain
-- Adapters: concrete providers/sinks (OTEL, stdout/file/loki/alerts, etc.) + inbound HTTP helpers
-- Facade (`logtrc`): routes constructors to core/adapters; exposes helpers like NewOTelWithService/NewAsyncWithOTel
+## What is NOT documented separately (and why)
 
-## Notes
-- No import cycles: Service depends only on Port/Domain; Adapters depend on Port/Service
-- OTEL provider lives in adapter; core takes a TelemetryProvider
-- Examples use util.WithTraceID/WithUserID/WithRequestID to propagate IDs safely
-- Metrics: Async pipelines report via delta counters + queue-size histogram when TelemetryProvider is available
+This is a library, not a service. The following categories common to
+service-shaped repos are intentionally collapsed into the canonical
+documents above:
 
-## Strategy Toggle Examples
+- **Workflows.** A library has no application-level workflows. The four
+  verbs (`Run` / `Enter` / `Emit` / `Init`) plus the adapter table in
+  [`../boeng/README.md`](../boeng/README.md) play that role.
+- **Business rules.** The Runtime Guarantees G1–G7 are this library's
+  business rules. They live in
+  [`../boeng/README.md`](../boeng/README.md) and are pinned by
+  `boeng/guarantees_test.go`.
+- **Specifications.** `boeng/api_freeze_test.go` is the executable spec
+  for the public surface; `boeng/guarantees_test.go` is the executable
+  spec for runtime behaviour. A prose `specs/` directory would
+  duplicate both without ever disagreeing — the doc-standards rule is
+  that specs exist to make intent-vs-code drift visible, and there's
+  no useful drift to expose here.
+- **Incidents.** No production incidents in this codebase yet. The
+  first one will create `.workflow/<run-id>/` per the existing repo
+  convention.
 
-Toggle strategies via CLI (perf_runner):
+## Performance
+
+Reproducible benchmarks live in `benchmarks/`:
 
 ```bash
-# Baseline strategy (all enabled by default)
-go run ./cmd/perf_runner -summary -total=150000 -workers=cpu -modes=strategy -sink=devnull
-
-# Disable masking
-go run ./cmd/perf_runner -summary -total=150000 -workers=cpu -modes=strategy -sink=devnull -strategy_no_mask=true
-
-# Disable sampling
-go run ./cmd/perf_runner -summary -total=150000 -workers=cpu -modes=strategy -sink=devnull -strategy_no_sample=true
-
-# Disable filtering (default true)
-go run ./cmd/perf_runner -summary -total=150000 -workers=cpu -modes=strategy -sink=devnull -strategy_no_filter=true
+go test -bench=Comparison -benchmem -benchtime=2s ./benchmarks/
 ```
 
-Toggle in code (runtime):
+Categories:
 
-```go
-import (
-    service "obs-brutal/internal/core/service"
-    "obs-brutal/internal/core/domain"
-)
+- `BenchmarkComparison_*` — vs `log.Printf`, `slog.LogAttrs`, `boeng.Emit`,
+  `boeng.Run`. The honest per-op cost of each layer.
+- `BenchmarkRun*` / `BenchmarkEnterStep` — boeng-only paths.
+- `TestBudget_*` — CI gates: fails if Run > 6 µs / 50 allocs / 4 KB, etc.
+  (see `benchmarks/budget_test.go`).
+- `TestBudget_MemoryUnderConcurrency` — proves per-op memory stays flat
+  from 1 to 1000 goroutines.
 
-s := service.NewStrategyLogBrt(domain.InfoLevel)
-// Remove specific strategies by kind/name (see strategies.go names)
-s.RemoveStrategy("sampler", "rate_sampler")
-s.RemoveStrategy("masker",  "regex_masker")
-s.RemoveStrategy("filter",  "level_filter")
-// Re-add if needed
-s.AddSampler(service.NewRateSampler(0.5))
-```
+A previous `cmd/perf_runner` benchmark suite existed pre-boeng. Its
+results file (`perf_results.md`) was removed when the runner stopped
+shipping; today's reproducible numbers supersede it.
 
-## Performance Tuning (Guidelines)
+## Open questions
 
-Defaults to start with:
+None at the moment. Add new ones here when they appear so future
+sessions don't re-discover them silently.
 
-- Async + Buffered: `buffer_size=1000`, `buffer_timeout=50–100ms`
-- File (Lumberjack) + Buffered: `rotate_size_bytes=10–50MB`, `max_backups=7–14`, `compress=true`
-- Network (Loki/OTLP): Async + batching/backoff; queue sized for peak; explicit drop policy
-- Hygiene: avoid `fmt.Sprintf` in hot path; limit fields; filter before sampler
-
-Observability metrics (OTEL hooks are built in):
-
-- Counters (delta): `obs_async_processed_total`, `obs_async_dropped_total`, `obs_async_batches_total`
-- Histogram: `obs_async_queue_size`
-
-Alerting suggestions:
-
-- Dropped logs sustained (≥ 1m): `increase(obs_async_dropped_total[1m]) > 0`
-- Backlog sustained (≥ 1m): `avg_over_time(obs_async_queue_size[1m]) / queue_capacity >= 0.8`
-- Throughput anomaly: processed delta drops under SLO baseline for ≥ 5m
-
-## Monitoring & Alerting (Prometheus + Alertmanager)
-
-PromQL alerts (examples):
-
-```promql
-# Dropped logs sustained (>0 deltas over 1m)
-increase(obs_async_dropped_total[1m]) > 0
-
-# Queue backlog sustained (>= 80% capacity)
-avg_over_time(obs_async_queue_size[1m]) / queue_capacity >= 0.8
-
-# Throughput anomaly: 5m rate below SLO baseline
-(
-  rate(obs_async_processed_total[5m])
-) < slo_processed_rate
-```
-
-Alertmanager (example routes/receivers):
-
-```yaml
-route:
-  group_by: ['alertname','service']
-  group_wait: 10s
-  group_interval: 1m
-  repeat_interval: 30m
-  receiver: 'ops'
-  routes:
-  - match:
-      severity: critical
-    receiver: 'paging'
-
-receivers:
-  - name: 'ops'
-    slack_configs:
-      - channel: '#ops'
-        send_resolved: true
-  - name: 'paging'
-    pagerduty_configs:
-      - routing_key: ${PAGERDUTY_KEY}
-```
-
-Notes:
-- Add `service` label to metric labels to route per service (NewOTelWithService sets it)
-- Define `queue_capacity` and `slo_processed_rate` as recording rules per service
+> Verified against `d6e1035` · 2026-06-28
