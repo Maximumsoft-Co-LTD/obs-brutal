@@ -79,6 +79,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   registry that nothing scraped, so `<op>_total` / `_duration_ms` /
   `_error_total` / `_panic_total` never appeared in the documented
   compose stack.
+- Loki sink outage behavior hardened (found by failure-mode testing):
+  the retry buffer is now capped at 10× the batch size (oldest entries
+  drop, counted) instead of growing unboundedly for the duration of an
+  outage; a post-failure backoff gate stops every `Write` from
+  attempting a synchronous connection while Loki is down; `Close` is
+  idempotent instead of panicking on a double close; and the flush
+  worker no longer deadlocks on a nil channel after `Close`.
+- Performance budget tests skip themselves under `-race` (the budgets
+  are sized for uninstrumented builds), so `go test -race ./...` now
+  runs clean as a whole.
 - `Init` called twice now closes the previous default before replacing
   it, so the old async pipeline + OTel exporter no longer leak.
 - `MaskEmail` operates on runes instead of bytes; multi-byte local

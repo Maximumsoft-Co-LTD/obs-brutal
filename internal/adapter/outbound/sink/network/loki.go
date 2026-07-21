@@ -79,6 +79,22 @@ type LokiPushSink struct {
 	// retry
 	retries int
 	backoff time.Duration
+	// retryAfter gates flush attempts after a failure so an outage
+	// doesn't turn every Write into a synchronous connection attempt.
+	retryAfter time.Time
+	// droppedOld counts entries trimmed from the retry buffer once it
+	// exceeds its cap during an outage.
+	droppedOld uint64
+}
+
+// retryBufferCap bounds how many entries the sink keeps queued while
+// the endpoint is unreachable. Oldest entries are dropped beyond this —
+// a bounded loss during an outage instead of unbounded memory growth.
+func (s *LokiPushSink) retryBufferCap() int {
+	if s.max > 0 {
+		return s.max * 10
+	}
+	return 1000
 }
 
 // NewLokiPushSink creates a Loki push sink. If labels is nil, a default
@@ -117,6 +133,12 @@ func (s *LokiPushSink) Write(entry *domain.LogEntry) error {
 
 	s.mu.Lock()
 	s.values = append(s.values, []string{fmt.Sprintf("%d", ts), string(lineBytes)})
+	// Enforce the cap here too: while the post-failure backoff gate is
+	// closed, entries accumulate without passing through requeue.
+	if limit := s.retryBufferCap(); len(s.values) > limit {
+		s.droppedOld += uint64(len(s.values) - limit)
+		s.values = s.values[len(s.values)-limit:]
+	}
 	needFlush := s.max > 0 && len(s.values) >= s.max
 	s.mu.Unlock()
 
@@ -133,6 +155,12 @@ func (s *LokiPushSink) flush() error {
 		return nil
 	}
 	if len(s.values) == 0 {
+		s.mu.Unlock()
+		return nil
+	}
+	// Back off after a failed push: without this gate, an outage makes
+	// every Write above the batch size attempt a synchronous connection.
+	if !s.retryAfter.IsZero() && time.Now().Before(s.retryAfter) {
 		s.mu.Unlock()
 		return nil
 	}
@@ -153,19 +181,35 @@ func (s *LokiPushSink) flush() error {
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		s.mu.Lock()
-		s.values = append(vals, s.values...)
-		s.mu.Unlock()
+		s.requeue(vals)
 		return err
 	}
 
 	if err := s.post(endpoint, headersCopy, body); err != nil {
-		s.mu.Lock()
-		s.values = append(vals, s.values...)
-		s.mu.Unlock()
+		s.requeue(vals)
 		return err
 	}
+	s.mu.Lock()
+	s.retryAfter = time.Time{}
+	s.mu.Unlock()
 	return nil
+}
+
+// requeue puts a failed batch back in front of the buffer, trims the
+// buffer to its cap (dropping oldest), and arms the retry backoff gate.
+func (s *LokiPushSink) requeue(vals [][]string) {
+	s.mu.Lock()
+	s.values = append(vals, s.values...)
+	if limit := s.retryBufferCap(); len(s.values) > limit {
+		s.droppedOld += uint64(len(s.values) - limit)
+		s.values = s.values[len(s.values)-limit:]
+	}
+	backoff := s.backoff
+	if backoff <= 0 {
+		backoff = 100 * time.Millisecond
+	}
+	s.retryAfter = time.Now().Add(backoff * time.Duration(s.retries+1))
+	s.mu.Unlock()
 }
 
 func (s *LokiPushSink) start() {
@@ -175,6 +219,9 @@ func (s *LokiPushSink) start() {
 		return
 	}
 	s.stopCh = make(chan struct{})
+	// Capture the channel: Close nils s.stopCh out (for idempotency),
+	// and a select on a nil channel would block this goroutine forever.
+	stop := s.stopCh
 	t := s.tout
 	if t <= 0 {
 		t = 100 * time.Millisecond
@@ -188,7 +235,7 @@ func (s *LokiPushSink) start() {
 		defer ticker.Stop()
 		for {
 			select {
-			case <-s.stopCh:
+			case <-stop:
 				return
 			case <-ticker.C:
 				_ = s.flush()
@@ -201,7 +248,13 @@ func (s *LokiPushSink) Close() error {
 	s.mu.Lock()
 	if s.stopCh != nil {
 		close(s.stopCh)
+		// nil out so a second Close is a no-op instead of a panic on
+		// re-closing the channel (Init-twice and defer patterns both
+		// end up double-closing sinks).
+		s.stopCh = nil
 	}
+	// Let the final flush attempt go through immediately.
+	s.retryAfter = time.Time{}
 	s.mu.Unlock()
 
 	s.wg.Wait()
