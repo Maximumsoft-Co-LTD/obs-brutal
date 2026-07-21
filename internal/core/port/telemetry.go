@@ -2,7 +2,7 @@ package port
 
 import (
 	"context"
-	"obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 	"time"
 )
 

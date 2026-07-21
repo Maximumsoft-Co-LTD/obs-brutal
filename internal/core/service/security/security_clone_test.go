@@ -1,8 +1,9 @@
 package security
 
 import (
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
+	"sync"
 	"testing"
 	"time"
 )
@@ -10,11 +11,23 @@ import (
 // memSink captures the last log entry for assertions
 type memSink struct {
 	port.SinkBase
+	mu   sync.Mutex
 	last *domain.LogEntry
 }
 
-func (m *memSink) Write(e *domain.LogEntry) error { m.last = e; return nil }
-func (m *memSink) Name() string                   { return "mem" }
+func (m *memSink) Write(e *domain.LogEntry) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.last = e
+	return nil
+}
+func (m *memSink) Name() string { return "mem" }
+
+func (m *memSink) Last() *domain.LogEntry {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.last
+}
 
 func TestSecurityLogWithSecurityDoesNotClearOriginalFields(t *testing.T) {
 	ms := &memSink{}
@@ -29,10 +42,10 @@ func TestSecurityLogWithSecurityDoesNotClearOriginalFields(t *testing.T) {
 
 	base.Info("after")
 	time.Sleep(150 * time.Millisecond)
-	if ms.last == nil {
+	if ms.Last() == nil {
 		t.Fatalf("no log captured from base")
 	}
-	if v, ok := ms.last.F["original"]; !ok || v != "keep" {
+	if v, ok := ms.Last().F["original"]; !ok || v != "keep" {
 		t.Fatalf("original field lost or changed, got: %v", v)
 	}
 }

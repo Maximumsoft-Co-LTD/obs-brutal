@@ -2,12 +2,13 @@ package service
 
 import (
 	"context"
+	"sync"
 	"time"
 
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port"
-	b "obs-brutal/internal/core/service/base"
-	strat "obs-brutal/internal/core/service/strategy"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
+	b "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service/base"
+	strat "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service/strategy"
 )
 
 // OTelLogBrt composes StrategyLogBrt and adds OTEL metrics/tracing hooks.
@@ -196,7 +197,10 @@ func (ol *OTelLogBrt) installPipelineMetricsHook() {
 		labels["service"] = svc
 	}
 	var prev b.AsyncStats
+	var hookMu sync.Mutex
 	ol.Strategy.SetMetricsHook(func(s b.AsyncStats) {
+		hookMu.Lock()
+		defer hookMu.Unlock()
 		incN := func(name string, n uint64) {
 			if n == 0 {
 				return
@@ -218,7 +222,18 @@ func (ol *OTelLogBrt) installPipelineMetricsHook() {
 		if s.Batches >= prev.Batches {
 			incN("obs_async_batches_total", s.Batches-prev.Batches)
 		}
+		if s.Errors >= prev.Errors {
+			incN("obs_async_errors_total", s.Errors-prev.Errors)
+		}
 		prev = s
 		meter.ObserveHistogram(context.Background(), "obs_async_queue_size", float64(s.QueueSize), labels)
 	})
+}
+
+// Stop flushes and shuts down the underlying async pipeline so batched
+// entries reach their sinks before process exit (or test teardown).
+func (ol *OTelLogBrt) Stop() {
+	if ol.Strategy != nil {
+		ol.Strategy.Stop()
+	}
 }

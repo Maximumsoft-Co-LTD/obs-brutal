@@ -3,7 +3,7 @@ package log
 import (
 	"time"
 
-	"obs-brutal/internal/core/port"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
 
 	"github.com/gin-gonic/gin"
 )

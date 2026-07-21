@@ -1,0 +1,17 @@
+package svc
+
+import (
+	"net/http"
+
+	boenghttp "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/http"
+)
+
+var GetUser = boenghttp.Wrap("get_user", func(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	user, err := repo.Find(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	_ = renderJSON(w, user)
+})

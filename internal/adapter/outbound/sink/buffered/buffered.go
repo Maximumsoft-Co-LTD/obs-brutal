@@ -1,9 +1,9 @@
 package buffered
 
 import (
-	stdout "obs-brutal/internal/adapter/outbound/sink/stdout"
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port"
+	stdout "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/sink/stdout"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
 	"sync"
 	"time"
 )

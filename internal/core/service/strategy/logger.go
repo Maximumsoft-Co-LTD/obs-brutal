@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port"
-	b "obs-brutal/internal/core/service/base"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
+	b "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service/base"
 )
 
 // StrategyLogBrt augments a base logger with strategies and async pipeline
@@ -22,7 +22,10 @@ func NewStrategyLogBrt(level domain.Level, sinks ...port.Sink) *StrategyLogBrt {
 	strategies.AddMasker(NewRegexMaskingStrategy())
 	strategies.AddSampler(NewRateSampler(1.0))
 	async := b.NewAsyncPipeline(1000, 4, 100*time.Millisecond, sinks...)
-	base := b.NewUnifiedLogBrt(level)
+	// Pass sinks to the embedded base too so chained calls (Fs/F → clone)
+	// keep writing to the configured sinks instead of falling back to the
+	// default stdout sink in UnifiedLogBrt.
+	base := b.NewUnifiedLogBrt(level, sinks...)
 	return &StrategyLogBrt{Base: base, strategies: strategies, async: async}
 }
 
@@ -103,5 +106,13 @@ func (sl *StrategyLogBrt) SetMetricsHook(h func(b.AsyncStats)) {
 	if sl.async != nil {
 		// adapt types since AsyncStats in base package
 		sl.async.SetMetricsHook(func(s b.AsyncStats) { h(s) })
+	}
+}
+
+// Stop flushes and shuts down the underlying async pipeline so batched
+// entries reach their sinks before process exit (or test teardown).
+func (sl *StrategyLogBrt) Stop() {
+	if sl.async != nil {
+		sl.async.Stop()
 	}
 }

@@ -1,10 +1,10 @@
 package shared
 
 import (
-	"obs-brutal/internal/adapter/outbound/otel"
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port"
-	service "obs-brutal/internal/core/service"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/otel"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
+	service "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service"
 )
 
 // Factory centralizes creation of sinks and wiring into core loggers.

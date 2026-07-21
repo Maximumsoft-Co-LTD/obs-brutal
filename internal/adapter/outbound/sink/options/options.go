@@ -4,9 +4,9 @@ package options
 
 import (
 	"fmt"
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port"
-	secsvc "obs-brutal/internal/core/service/security"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
+	secsvc "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service/security"
 	"reflect"
 )
 

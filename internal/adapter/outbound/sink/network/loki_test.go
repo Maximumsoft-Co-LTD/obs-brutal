@@ -8,7 +8,7 @@ import (
     "testing"
     "time"
 
-    "obs-brutal/internal/core/domain"
+    "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 )
 
 func TestLokiBatchSizeFlush(t *testing.T) {

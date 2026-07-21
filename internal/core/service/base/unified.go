@@ -7,9 +7,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port"
-	"obs-brutal/internal/util"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/util"
 )
 
 // LogBrt defines fluent logbrut behavior

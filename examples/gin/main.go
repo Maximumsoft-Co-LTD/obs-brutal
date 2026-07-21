@@ -1,43 +1,31 @@
+// Gin adapter demo. Run:  go run ./examples/gin
+//
+// Open http://localhost:8080/users/u-7 in a second terminal:
+//   curl http://localhost:8080/users/u-7
+//
+// Notice that the handler never imports OpenTelemetry. boenggin.Middleware
+// opens a boeng operation per request and boenggin.L(c) hands the
+// handler the request-scoped logger.
 package main
 
 import (
-    "net/http"
-    "os"
+	"github.com/gin-gonic/gin"
 
-    "obs-brutal/internal/util"
-    "obs-brutal/logtrc"
-
-    "github.com/gin-gonic/gin"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
+	boenggin "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/gin"
 )
 
 func main() {
+	defer boeng.Init(boeng.Config{Service: "gin_demo", Env: "dev"}).Close()
+
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
+	r.Use(boenggin.Middleware())
 
-	// Read endpoint from env (fallback to jaeger:4317)
-	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
-	if endpoint == "" {
-		endpoint = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-	}
-	if endpoint == "" {
-		endpoint = "jaeger:4317"
-	}
+	r.GET("/users/:id", func(c *gin.Context) {
+		boenggin.L(c).F("user_id", c.Param("id")).Info("user fetch requested")
+		c.JSON(200, gin.H{"id": c.Param("id"), "name": "demo"})
+	})
 
-    // Create OTEL-enabled LogBrt with service label and middleware
-    otelLogBrt, _, err := logtrc.NewOTelWithService("example-gin", "1.0.0", "dev", endpoint, logtrc.INFO)
-    if err == nil && otelLogBrt != nil {
-        r.Use(logtrc.OTelMiddleware(otelLogBrt))
-    } else {
-        // Fallback to basic middleware if OTEL not available
-        r.Use(logtrc.Middleware("example-gin"))
-    }
-
-    r.GET("/", func(c *gin.Context) {
-        // Prefer OTEL-aware LogBrt if present; demonstrate WithTraceID
-        ctx := util.WithTraceID(c.Request.Context(), "gin-trace-001")
-        log := logtrc.GetOTelLog(c).Ctx(ctx)
-        log.F("environment", "dev").Info("hello from examples/gin (otel)")
-        c.String(http.StatusOK, "ok")
-    })
-
-	r.Run(":8080")
+	_ = r.Run(":8080")
 }

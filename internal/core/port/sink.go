@@ -1,7 +1,7 @@
 // Package port defines hexagonal ports for the core logging domain
 package port
 
-import "obs-brutal/internal/core/domain"
+import "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 
 // Sink is the output port for log entries.
 type Sink interface {
