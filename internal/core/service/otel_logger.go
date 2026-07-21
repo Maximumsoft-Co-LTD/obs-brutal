@@ -99,20 +99,30 @@ func (ol *OTelLogBrt) Fatalf(f string, a ...interface{}) {
 	ol.record(domain.FatalLevel, start)
 }
 
-// Fluent methods delegate and return the same wrapper (which implements base.LogBrt)
+// clone returns a copy sharing the telemetry provider so fluent chains
+// derive new loggers instead of mutating the shared one. Mutating in
+// place contaminated every subsequent operation's fields and span ids.
+func (ol *OTelLogBrt) clone() *OTelLogBrt {
+	return &OTelLogBrt{Strategy: ol.Strategy, tp: ol.tp}
+}
+
+// Fluent methods delegate to a clone of the wrapper (which implements base.LogBrt)
 func (ol *OTelLogBrt) F(k string, v interface{}) LogBrt {
-	ol.Strategy = ol.Strategy.F(k, v).(*strat.StrategyLogBrt)
-	return ol
+	c := ol.clone()
+	c.Strategy = ol.Strategy.F(k, v).(*strat.StrategyLogBrt)
+	return c
 }
 func (ol *OTelLogBrt) Fs(m map[string]interface{}) LogBrt {
-	ol.Strategy = ol.Strategy.Fs(m).(*strat.StrategyLogBrt)
-	return ol
+	c := ol.clone()
+	c.Strategy = ol.Strategy.Fs(m).(*strat.StrategyLogBrt)
+	return c
 }
 
 // Ctx attaches a context for correlation/propagation.
 func (ol *OTelLogBrt) Ctx(ctx context.Context) LogBrt {
-	ol.Strategy = ol.Strategy.Ctx(ctx).(*strat.StrategyLogBrt)
-	return ol
+	c := ol.clone()
+	c.Strategy = ol.Strategy.Ctx(ctx).(*strat.StrategyLogBrt)
+	return c
 }
 func (ol *OTelLogBrt) TraceID(id string) LogBrt   { return ol.F("trace_id", id) }
 func (ol *OTelLogBrt) UserID(id string) LogBrt    { return ol.F("user_id", id) }

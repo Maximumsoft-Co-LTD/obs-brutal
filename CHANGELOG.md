@@ -58,6 +58,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`cli`, `cron`, `gin`, `http`, `mongo`, `rabbit`, `redis`).
 
 ### Fixed
+- `Close` now actually flushes the async pipeline: `AsyncPipeline.Stop`
+  drains queued entries and lets sink workers finish in-flight batches
+  before the goroutines exit. Previously Stop cancelled the workers
+  outright, so a process shorter than the 100 ms flush interval (any
+  CLI, cron job, or crashing service) emitted **no logs at all** in
+  OTel/Async mode. Writes issued after Stop fall back to the
+  synchronous path instead of vanishing into a dead queue.
+- Fluent chaining (`F` / `Fs` / `Ctx`) on the OTel-mode logger derives
+  a new logger instead of mutating the shared one. In-place mutation
+  meant every field ever attached (`user_id`, `error`, `span_id`, …)
+  leaked into all subsequent operations' log lines — unrelated ops
+  reported each other's errors and correlation ids. `StrategyLogBrt`
+  and `OTelLogBrt` now clone on chain, matching the underlying
+  `UnifiedLogBrt` semantics.
+- Per-operation metrics now reach the OTLP collector: the meter
+  provider gained an `otlpmetricgrpc` periodic reader (10 s interval,
+  flushed on `Close`) targeting the same `Config.OTel` endpoint as
+  traces. Previously metrics only fed an in-process Prometheus
+  registry that nothing scraped, so `<op>_total` / `_duration_ms` /
+  `_error_total` / `_panic_total` never appeared in the documented
+  compose stack.
 - `Init` called twice now closes the previous default before replacing
   it, so the old async pipeline + OTel exporter no longer leak.
 - `MaskEmail` operates on runes instead of bytes; multi-byte local

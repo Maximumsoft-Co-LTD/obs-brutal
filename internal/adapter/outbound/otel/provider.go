@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
@@ -59,7 +60,20 @@ func NewOTelProvider(serviceName, version, environment, endpoint string) (*Provi
 	if err != nil {
 		return nil, err
 	}
-	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(promExporter), sdkmetric.WithResource(res))
+	// Metrics must leave the process the same way traces do: via OTLP to
+	// the collector at Config.OTel. The prometheus reader above only
+	// feeds the in-process registry behind PrometheusHandler(), which
+	// nothing scrapes unless the application mounts it — with only that
+	// reader, per-op metrics never reached the documented compose stack.
+	metricExporter, err := otlpmetricgrpc.New(context.Background(), otlpmetricgrpc.WithEndpoint(endpoint), otlpmetricgrpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+	mp := sdkmetric.NewMeterProvider(
+		sdkmetric.WithReader(promExporter),
+		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter, sdkmetric.WithInterval(10*time.Second))),
+		sdkmetric.WithResource(res),
+	)
 	otel.SetTracerProvider(tp)
 	otel.SetMeterProvider(mp)
 	propagator := propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
