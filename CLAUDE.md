@@ -84,9 +84,10 @@ docker compose --profile full up -d   # adds Tempo, Jaeger, Prometheus, OTel Col
 ```
 
 Default endpoints: Grafana `:3000`, Prometheus `:9090`, Loki `:3100`,
-Tempo `:3200`, Jaeger UI `:16686`, OTLP gRPC `:4317`, Prometheus scrape
-`:8889`, ClickHouse HTTP `:8123`, Wiremock `:8089`. Promtail tails
-`../logs` mounted to `/var/log/app`.
+Tempo `:3200`, Mimir `:9009` (OTLP ingest at `/otlp`, PromQL at
+`/prometheus`), Jaeger UI `:16686`, OTLP gRPC `:4317`, Prometheus
+scrape `:8889`, ClickHouse HTTP `:8123`, Wiremock `:8089`. Promtail
+tails `../logs` mounted to `/var/log/app`.
 
 `scripts/e2e_smoke.sh` runs the three boeng demo examples in the
 background and dumps output to `logs/<name>.{out,err}`.

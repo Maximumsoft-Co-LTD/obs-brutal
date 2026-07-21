@@ -95,6 +95,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   budget still covers encode + write; alloc and byte budgets are
   unchanged.
 
+### Compose stack
+- Added Grafana Mimir (`:9009`) to the `full` profile as a long-term
+  metrics backend. The OTel Collector's metrics pipeline now exports to
+  both its local Prometheus endpoint and Mimir via OTLP HTTP
+  (`otlphttp/mimir`), and Grafana ships a provisioned `Mimir`
+  datasource pointing at Mimir's Prometheus-compatible query API.
+  Application code is unchanged — metrics already leave the process as
+  OTLP to `Config.OTel`.
+
 ### Architectural
 - Established the **Runtime + Pipeline** architecture: business code
   declares an operation; the runtime dispatches it through Logger →
