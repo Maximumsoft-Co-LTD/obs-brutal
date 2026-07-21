@@ -1,0 +1,31 @@
+# Build / test output
+bin/
+dist/
+*.test
+*.out
+*.err
+*.prof
+coverage.out
+coverage.html
+
+# Local scratch — scripts/e2e_smoke.sh writes here
+logs/
+
+# Go module cache (vendored deps not used)
+vendor/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Local AI tooling (orchestrator, skills, agent configs)
+.claude/

@@ -17,8 +17,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"obs-brutal/boeng"
-	boengmongo "obs-brutal/boeng/mongo"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
+	boengmongo "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/mongo"
 )
 
 func main() {

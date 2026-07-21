@@ -5,7 +5,7 @@ This file points at canonical documentation — it does not duplicate it.
 
 ## What this repository is
 
-`obs-brutal` ships **one public Go package**: `obs-brutal/boeng`. It is
+`obs-brutal` ships **one public Go package**: `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng`. It is
 an **Operation Runtime** — application code declares business operations
 (`boeng.Run` / `Enter` / `Emit`) and the runtime produces structured
 logs, distributed traces, per-operation metrics, panic recovery, and
@@ -38,7 +38,7 @@ Before editing any file in this repo, load these in order:
   should respect.
 - `internal/logtrc/` is the low-level fluent logger. It was public
   pre-v1; it is **internal** now. Anything you find that imports it
-  from outside `obs-brutal/internal/...` is a bug.
+  from outside `github.com/Maximumsoft-Co-LTD/obs-brutal/internal/...` is a bug.
 
 ## Common commands
 

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 func TestEnter_CloseSucceeds(t *testing.T) {

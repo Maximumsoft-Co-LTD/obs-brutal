@@ -1,6 +1,6 @@
 package boeng
 
-import "obs-brutal/internal/core/port"
+import "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
 
 // Sink is the output port boeng writes structured log entries to.
 // Most application code never references this type directly — the

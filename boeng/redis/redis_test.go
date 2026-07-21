@@ -3,7 +3,7 @@ package boengredis_test
 import (
 	"testing"
 
-	boengredis "obs-brutal/boeng/redis"
+	boengredis "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/redis"
 )
 
 // TestHook_ReturnsHook is the smoke test — verifies the public API

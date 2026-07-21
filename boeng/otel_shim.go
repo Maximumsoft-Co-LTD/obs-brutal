@@ -7,7 +7,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	outboundotel "obs-brutal/internal/adapter/outbound/otel"
+	outboundotel "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/otel"
 )
 
 // otelProviderShim is a thin wrapper that lets boeng treat OTEL as optional.

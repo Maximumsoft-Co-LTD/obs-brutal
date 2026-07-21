@@ -6,7 +6,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 func TestSanitizeMetricName(t *testing.T) {

@@ -34,7 +34,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed (breaking from pre-release state)
 - `logtrc` package moved to `internal/logtrc`. Users should import
-  `obs-brutal/boeng` instead. The fluent `LogBrt` interface, the sink
+  `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng` instead. The fluent `LogBrt` interface, the sink
   constructors (`NewFastStdoutSink`, `NewLokiPushSink`, etc.), and the
   logger constructors (`NewOTelWithService`, `NewAsyncLogBrt`, etc.)
   are no longer part of the public API surface.
@@ -78,17 +78,17 @@ application code to import OpenTelemetry. Each opens a boeng operation
 per call site and records duration + error automatically; HTTP and
 RabbitMQ also propagate W3C trace context across process boundaries.
 
-- `obs-brutal/boeng/gin` — Gin middleware (`boenggin.Middleware`,
+- `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/gin` — Gin middleware (`boenggin.Middleware`,
   `boenggin.L(c)`).
-- `obs-brutal/boeng/http` — `boenghttp.Middleware` /
+- `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/http` — `boenghttp.Middleware` /
   `boenghttp.Wrap(name, handler)` for servers, `boenghttp.Transport(inner)`
   for clients. Outgoing requests carry a `traceparent` header; incoming
   requests extract it.
-- `obs-brutal/boeng/mongo` — `boengmongo.CommandMonitor()` for use with
+- `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/mongo` — `boengmongo.CommandMonitor()` for use with
   `mongo.Connect(..., options.Client().SetMonitor(...))`.
-- `obs-brutal/boeng/redis` — `boengredis.Hook()` for use with
+- `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/redis` — `boengredis.Hook()` for use with
   `client.AddHook(...)`.
-- `obs-brutal/boeng/rabbit` — `boengrabbit.Publish(...)` injects
+- `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/rabbit` — `boengrabbit.Publish(...)` injects
   `traceparent` into `amqp.Publishing.Headers`; `boengrabbit.Consume(name, handler)`
   extracts it so the consumer's op nests under the producer's trace.
 

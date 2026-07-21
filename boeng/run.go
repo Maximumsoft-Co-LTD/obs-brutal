@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"obs-brutal/internal/logtrc"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/logtrc"
 )
 
 type ctxKey int

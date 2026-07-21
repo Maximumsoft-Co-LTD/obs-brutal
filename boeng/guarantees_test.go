@@ -16,8 +16,8 @@ import (
 	"errors"
 	"testing"
 
-	"obs-brutal/boeng"
-	"obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 )
 
 func runGuarantee(t *testing.T, cfg boeng.Config, body func(t *testing.T, sink *captureSink)) {

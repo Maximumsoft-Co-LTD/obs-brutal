@@ -17,8 +17,8 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"obs-brutal/boeng"
-	boengrabbit "obs-brutal/boeng/rabbit"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
+	boengrabbit "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/rabbit"
 )
 
 func main() {

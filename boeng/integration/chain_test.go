@@ -34,12 +34,12 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"obs-brutal/boeng"
-	boenghttp "obs-brutal/boeng/http"
-	boengmongo "obs-brutal/boeng/mongo"
-	boengrabbit "obs-brutal/boeng/rabbit"
-	boengredis "obs-brutal/boeng/redis"
-	"obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
+	boenghttp "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/http"
+	boengmongo "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/mongo"
+	boengrabbit "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/rabbit"
+	boengredis "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/redis"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 )
 
 type captureSink struct {

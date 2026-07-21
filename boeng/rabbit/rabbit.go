@@ -14,7 +14,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 // Publish wraps a basic publish with a boeng operation AND injects the

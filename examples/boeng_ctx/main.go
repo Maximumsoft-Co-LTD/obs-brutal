@@ -14,7 +14,7 @@ import (
 	"errors"
 	"time"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 // User opts into Loggable: that gives the author full control of field

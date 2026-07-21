@@ -27,8 +27,8 @@ import (
 	"sync"
 	"testing"
 
-	"obs-brutal/boeng"
-	"obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 )
 
 // captureSink implements port.Sink. It is the lens we use to see what

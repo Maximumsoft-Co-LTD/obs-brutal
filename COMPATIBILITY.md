@@ -13,14 +13,14 @@ disappears or changes shape.
 
 Concretely, semver applies to:
 
-- Package `obs-brutal/boeng` — every exported identifier (types,
+- Package `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng` — every exported identifier (types,
   functions, methods, constants, variables).
 - The five adapter sub-packages:
-  - `obs-brutal/boeng/gin`
-  - `obs-brutal/boeng/http`
-  - `obs-brutal/boeng/mongo`
-  - `obs-brutal/boeng/redis`
-  - `obs-brutal/boeng/rabbit`
+  - `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/gin`
+  - `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/http`
+  - `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/mongo`
+  - `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/redis`
+  - `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/rabbit`
 - The JSON output schema produced by the default stdout sink
   (`datetime`, `level`, `msg`, `service`, `env`, `op`, `user_id`,
   `module`, `tenant_id`, `trace_id`, `span_id`, `request_id`,
@@ -34,10 +34,10 @@ Concretely, semver applies to:
 Everything under `internal/` is implementation detail and may change
 in any release, including patch releases. This includes:
 
-- `obs-brutal/internal/core/...`
-- `obs-brutal/internal/adapter/...`
-- `obs-brutal/internal/logtrc/...`
-- `obs-brutal/internal/util/...`
+- `github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/...`
+- `github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/...`
+- `github.com/Maximumsoft-Co-LTD/obs-brutal/internal/logtrc/...`
+- `github.com/Maximumsoft-Co-LTD/obs-brutal/internal/util/...`
 
 Build-tagged test helpers (`*_test.go` and `export_test.go`) are also
 exempt.

@@ -1,6 +1,6 @@
 package svc
 
-import "obs-brutal/boeng"
+import "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 
 func CreateUser(user User) error {
 	op := boeng.Enter("create_user", user)

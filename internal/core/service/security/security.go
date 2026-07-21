@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port"
-	svc "obs-brutal/internal/core/service"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
+	svc "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service"
 )
 
 // ===== PII DETECTION & MASKING =====

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 func TestRun_SuccessReturnsNilError(t *testing.T) {

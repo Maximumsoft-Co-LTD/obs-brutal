@@ -5,7 +5,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/event"
 
-	boengmongo "obs-brutal/boeng/mongo"
+	boengmongo "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/mongo"
 )
 
 // TestCommandMonitor_HasStartedSucceededFailed verifies the surface of

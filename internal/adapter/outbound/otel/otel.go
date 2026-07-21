@@ -1,10 +1,10 @@
 package otel
 
 import (
-	telem "obs-brutal/internal/adapter/outbound/telemetry"
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port"
-	service "obs-brutal/internal/core/service"
+	telem "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/telemetry"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
+	service "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service"
 )
 
 // Public adapter API for constructing providers and OTel-enabled loggers

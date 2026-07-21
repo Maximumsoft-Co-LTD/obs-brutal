@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 )
 
 // Test DropOldest policy keeps queue full and counts dropped correctly

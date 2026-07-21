@@ -47,10 +47,10 @@ var banned = []string{
 
 func TestAITransformation_Fixtures(t *testing.T) {
 	cases := []transformCase{
-		{name: "simple", maxAddedLines: 3, requireImports: []string{"obs-brutal/boeng"}},
-		{name: "errret", maxAddedLines: 4, requireImports: []string{"obs-brutal/boeng"}},
-		{name: "panic_recover", maxAddedLines: 5, requireImports: []string{"obs-brutal/boeng"}},
-		{name: "http_handler", maxAddedLines: 3, requireImports: []string{"obs-brutal/boeng/http"}},
+		{name: "simple", maxAddedLines: 3, requireImports: []string{"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"}},
+		{name: "errret", maxAddedLines: 4, requireImports: []string{"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"}},
+		{name: "panic_recover", maxAddedLines: 5, requireImports: []string{"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"}},
+		{name: "http_handler", maxAddedLines: 3, requireImports: []string{"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/http"}},
 	}
 
 	for _, tc := range cases {

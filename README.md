@@ -197,7 +197,7 @@ better deal; if you only need a bare log line, use `slog`.
 ## Quickstart
 
 ```bash
-go get obs-brutal/boeng
+go get github.com/Maximumsoft-Co-LTD/obs-brutal/boeng
 ```
 
 ```go
@@ -206,7 +206,7 @@ package main
 import (
     "context"
 
-    "obs-brutal/boeng"
+    "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 type User struct{ ID, Email string }
@@ -297,11 +297,11 @@ trace stays continuous from one service to the next.
 
 | Adapter                       | Use it via                                           |
 | ----------------------------- | ---------------------------------------------------- |
-| `obs-brutal/boeng/gin`        | `r.Use(boenggin.Middleware())`                       |
-| `obs-brutal/boeng/http`       | `boenghttp.Middleware(handler)` / `boenghttp.Transport(...)` |
-| `obs-brutal/boeng/mongo`      | `options.Client().SetMonitor(boengmongo.CommandMonitor())` |
-| `obs-brutal/boeng/redis`      | `client.AddHook(boengredis.Hook())`                  |
-| `obs-brutal/boeng/rabbit`     | `boengrabbit.Publish(ctx, ch, ex, key, msg)` / `boengrabbit.Consume(name, handler)` |
+| `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/gin`        | `r.Use(boenggin.Middleware())`                       |
+| `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/http`       | `boenghttp.Middleware(handler)` / `boenghttp.Transport(...)` |
+| `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/mongo`      | `options.Client().SetMonitor(boengmongo.CommandMonitor())` |
+| `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/redis`      | `client.AddHook(boengredis.Hook())`                  |
+| `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/rabbit`     | `boengrabbit.Publish(ctx, ch, ex, key, msg)` / `boengrabbit.Consume(name, handler)` |
 
 ## Local observability stack
 
@@ -343,7 +343,7 @@ change between releases.
 
 ## For AI coding assistants
 
-If you are an LLM editing a Go file that imports `obs-brutal/boeng`,
+If you are an LLM editing a Go file that imports `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng`,
 apply these rules verbatim:
 
 **DO**

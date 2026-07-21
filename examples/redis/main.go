@@ -14,8 +14,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"obs-brutal/boeng"
-	boengredis "obs-brutal/boeng/redis"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
+	boengredis "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/redis"
 )
 
 func main() {

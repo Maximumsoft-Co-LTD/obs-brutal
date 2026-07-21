@@ -15,7 +15,7 @@ import (
 	"sync"
 	"testing"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 // Budget — tightened just past observed CI numbers so a real

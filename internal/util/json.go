@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 )
 
 func WriteJSONToWriter(w io.Writer, entry *domain.LogEntry) error {

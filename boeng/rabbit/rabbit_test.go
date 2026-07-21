@@ -8,8 +8,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
-	"obs-brutal/boeng"
-	boengrabbit "obs-brutal/boeng/rabbit"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
+	boengrabbit "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/rabbit"
 )
 
 // TestConsume_ExtractsTraceparentFromHeaders proves the consumer side

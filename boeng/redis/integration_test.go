@@ -11,9 +11,9 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"obs-brutal/boeng"
-	boengredis "obs-brutal/boeng/redis"
-	"obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
+	boengredis "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/redis"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 )
 
 func redisAddr() string {

@@ -1,6 +1,6 @@
 package port
 
-import "obs-brutal/internal/core/domain"
+import "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 
 // FilterStrategy decides whether a log should be written
 type FilterStrategy interface {

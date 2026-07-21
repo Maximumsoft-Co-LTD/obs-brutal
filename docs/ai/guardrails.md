@@ -1,7 +1,7 @@
 # AI guardrails
 
 Rules for any AI coding assistant editing Go code in a project that
-imports `obs-brutal/boeng`. Apply these verbatim; they keep the
+imports `github.com/Maximumsoft-Co-LTD/obs-brutal/boeng`. Apply these verbatim; they keep the
 Runtime Guarantees (G1–G7) intact.
 
 These rules are the deep version of the "For AI coding assistants"
@@ -106,7 +106,7 @@ ladder, **stop**. boeng already does that — you're writing it twice.
   It is a test helper that disables real sinks; production callers
   silently lose all output.
 
-- **Do not import `obs-brutal/internal/...`** in any code that is not
+- **Do not import `github.com/Maximumsoft-Co-LTD/obs-brutal/internal/...`** in any code that is not
   inside the same `internal/` tree. The whole `internal/` subtree is
   excluded from the v1.x semver contract — see
   [`../../COMPATIBILITY.md`](../../COMPATIBILITY.md). If a symbol you

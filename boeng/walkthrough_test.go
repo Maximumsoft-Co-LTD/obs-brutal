@@ -22,8 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"obs-brutal/boeng"
-	"obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 )
 
 // expectedLine is a fingerprint of one log entry the scenario must produce.

@@ -18,12 +18,12 @@ import (
 	"github.com/gin-gonic/gin"
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"obs-brutal/boeng"
-	boenggin "obs-brutal/boeng/gin"
-	boenghttp "obs-brutal/boeng/http"
-	boengmongo "obs-brutal/boeng/mongo"
-	boengrabbit "obs-brutal/boeng/rabbit"
-	boengredis "obs-brutal/boeng/redis"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
+	boenggin "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/gin"
+	boenghttp "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/http"
+	boengmongo "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/mongo"
+	boengrabbit "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/rabbit"
+	boengredis "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/redis"
 )
 
 // TestPublicAPI compiles a list of references to every public identifier

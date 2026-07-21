@@ -3,7 +3,7 @@ package svc
 import (
 	"context"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 func PublishEvent(ctx context.Context, ev Event) {

@@ -16,8 +16,8 @@ import (
 	"net/http"
 	"time"
 
-	"obs-brutal/boeng"
-	boenghttp "obs-brutal/boeng/http"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
+	boenghttp "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/http"
 )
 
 func main() {

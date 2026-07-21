@@ -3,7 +3,7 @@ package svc
 import (
 	"context"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 func ChargeCard(ctx context.Context, card Card, amount int) (err error) {

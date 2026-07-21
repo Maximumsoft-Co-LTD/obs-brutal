@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"time"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 const tickInterval = 200 * time.Millisecond

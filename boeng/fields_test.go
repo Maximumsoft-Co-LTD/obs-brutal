@@ -3,7 +3,7 @@ package boeng_test
 import (
 	"testing"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 func extractForTest(v any) map[string]any {

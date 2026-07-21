@@ -20,7 +20,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/event"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 // CommandMonitor returns a *event.CommandMonitor that opens a boeng

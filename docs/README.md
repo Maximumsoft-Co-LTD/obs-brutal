@@ -22,7 +22,7 @@ Start here, load only the leaf doc you need.
 | ---------------------------------------------- | -------------------------------------------------------- |
 | [`../README.md`](../README.md)                 | Product framing, four verbs, supported Go, examples list |
 | [`../boeng/README.md`](../boeng/README.md)     | Full API surface, Loggable contract, runtime guarantees G1–G7, test pyramid |
-| [`../boeng/doc.go`](../boeng/doc.go)           | Package godoc — read by `go doc obs-brutal/boeng`        |
+| [`../boeng/doc.go`](../boeng/doc.go)           | Package godoc — read by `go doc github.com/Maximumsoft-Co-LTD/obs-brutal/boeng`        |
 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md)     | One-diagram mental model: Business → Operation → Pipeline → Outputs |
 | [`../COMPATIBILITY.md`](../COMPATIBILITY.md)   | v1.x semver policy: what counts as breaking, deprecation rules |
 | [`../CHANGELOG.md`](../CHANGELOG.md)           | Release history, breaking changes, test pyramid additions |

@@ -19,8 +19,8 @@ import (
 	"sort"
 	"testing"
 
-	"obs-brutal/boeng"
-	"obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 )
 
 var updateGolden = flag.Bool("update", false, "rewrite golden testdata files")

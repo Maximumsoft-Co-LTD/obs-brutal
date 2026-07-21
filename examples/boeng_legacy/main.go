@@ -15,7 +15,7 @@ package main
 import (
 	"errors"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 // User is a plain DTO. No tags. The reflection fallback converts field

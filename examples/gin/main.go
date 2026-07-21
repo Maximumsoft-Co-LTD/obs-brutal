@@ -11,8 +11,8 @@ package main
 import (
 	"github.com/gin-gonic/gin"
 
-	"obs-brutal/boeng"
-	boenggin "obs-brutal/boeng/gin"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
+	boenggin "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/gin"
 )
 
 func main() {

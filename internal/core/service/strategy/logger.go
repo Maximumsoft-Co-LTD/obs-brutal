@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port"
-	b "obs-brutal/internal/core/service/base"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
+	b "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service/base"
 )
 
 // StrategyLogBrt augments a base logger with strategies and async pipeline

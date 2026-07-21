@@ -3,7 +3,7 @@ package svc
 import (
 	"net/http"
 
-	boenghttp "obs-brutal/boeng/http"
+	boenghttp "github.com/Maximumsoft-Co-LTD/obs-brutal/boeng/http"
 )
 
 var GetUser = boenghttp.Wrap("get_user", func(w http.ResponseWriter, r *http.Request) {

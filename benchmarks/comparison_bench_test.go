@@ -22,7 +22,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 var (

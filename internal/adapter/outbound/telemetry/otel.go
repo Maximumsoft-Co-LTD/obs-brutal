@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"

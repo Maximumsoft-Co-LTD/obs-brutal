@@ -7,8 +7,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
-	"obs-brutal/internal/core/service/base"
-	"obs-brutal/internal/logtrc"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service/base"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/logtrc"
 )
 
 // Logger is the operation-scoped fluent logger boeng exposes through

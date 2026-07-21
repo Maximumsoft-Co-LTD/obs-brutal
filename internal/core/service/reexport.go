@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port"
-	b "obs-brutal/internal/core/service/base"
-	strat "obs-brutal/internal/core/service/strategy"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
+	b "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service/base"
+	strat "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service/strategy"
 )
 
 // ===== Base Logger Re-exports =====

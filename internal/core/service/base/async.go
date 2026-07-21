@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"obs-brutal/internal/core/domain"
-	"obs-brutal/internal/core/port"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
 )
 
 // AsyncPipeline provides non-blocking async logging

@@ -12,7 +12,7 @@ import (
 	"reflect"
 	"testing"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 type user struct {

@@ -23,7 +23,7 @@ import (
 	"os"
 	"strconv"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 func main() {

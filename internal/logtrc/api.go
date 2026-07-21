@@ -7,16 +7,16 @@ package logtrc
 import (
     "time"
 
-	inboundlog "obs-brutal/internal/adapter/inbound/log"
-	outboundotel "obs-brutal/internal/adapter/outbound/otel"
-	alertsink "obs-brutal/internal/adapter/outbound/sink/alerts"
-	cfgopts "obs-brutal/internal/adapter/outbound/sink/options"
-	telem "obs-brutal/internal/adapter/outbound/telemetry"
-	"obs-brutal/internal/core/domain"
-    "obs-brutal/internal/core/port"
-	service "obs-brutal/internal/core/service"
-	secsvc "obs-brutal/internal/core/service/security"
-	sfactory "obs-brutal/internal/shared"
+	inboundlog "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/inbound/log"
+	outboundotel "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/otel"
+	alertsink "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/sink/alerts"
+	cfgopts "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/sink/options"
+	telem "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/telemetry"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
+    "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
+	service "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service"
+	secsvc "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service/security"
+	sfactory "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/shared"
 
 	"github.com/gin-gonic/gin"
 )

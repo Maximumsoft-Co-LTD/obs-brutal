@@ -18,7 +18,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"obs-brutal/boeng"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/boeng"
 )
 
 // Hook returns a redis.Hook implementation that wraps every Redis

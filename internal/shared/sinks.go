@@ -1,12 +1,12 @@
 package shared
 
 import (
-	bufSink "obs-brutal/internal/adapter/outbound/sink/buffered"
-	fileSink "obs-brutal/internal/adapter/outbound/sink/file"
-	netSink "obs-brutal/internal/adapter/outbound/sink/network"
-	stdout "obs-brutal/internal/adapter/outbound/sink/stdout"
-	zlogSink "obs-brutal/internal/adapter/outbound/sink/zerolog"
-	"obs-brutal/internal/core/port"
+	bufSink "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/sink/buffered"
+	fileSink "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/sink/file"
+	netSink "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/sink/network"
+	stdout "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/sink/stdout"
+	zlogSink "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/sink/zerolog"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
 	"time"
 )
 
