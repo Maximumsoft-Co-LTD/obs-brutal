@@ -51,9 +51,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   back to reflection.
 - `Config.Masking` removed — it was a TODO field that never wired into
   anything.
-- All non-`boeng` example programs (`basic`, `gin`, `http`, `mongo`,
-  `redis`, etc.) removed. The three remaining examples (`boeng`,
-  `boeng_ctx`, `boeng_legacy`) cover the three documented usage modes.
+- Pre-v1 demo programs (`basic`, `demo_all`, `promtail_file`,
+  `otel_loki`, etc.) removed along with `scripts/demo.sh`. The examples
+  that remain are `boeng`, `boeng_ctx`, `boeng_legacy` (the three
+  documented usage modes) plus one small program per adapter
+  (`cli`, `cron`, `gin`, `http`, `mongo`, `rabbit`, `redis`).
 
 ### Fixed
 - `Init` called twice now closes the previous default before replacing

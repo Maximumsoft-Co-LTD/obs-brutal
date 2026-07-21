@@ -6,7 +6,7 @@
 //
 //	op := boeng.Enter("name", subject)
 //	defer op.Close()
-//	// ... do work, optionally op.Log / op.Event / op.Fail ...
+//	// ... do work, optionally op.Log / op.Emit / op.Fail ...
 //
 // No function signature changes are required. Trace nesting still works as
 // long as you pass op.Context() into anything that calls boeng again.

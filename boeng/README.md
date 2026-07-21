@@ -350,3 +350,5 @@ adds new pipeline stages (audit, profiling, sampling tuning) without
 changing the four verbs or the operation-handle methods. The
 `TestPublicAPI` freeze test enforces that no exported identifier
 disappears without an intentional, documented major-version change.
+
+> Verified against `8306889` · 2026-07-22
