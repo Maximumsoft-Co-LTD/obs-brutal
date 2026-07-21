@@ -1,62 +1,31 @@
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
+# Build / test output
 bin/
-
-# Test binary, built with `go test -c`
+dist/
 *.test
-
-# Output of the go coverage tool
 *.out
+*.err
+*.prof
+coverage.out
 coverage.html
 
-# Dependency directories
+# Local scratch — scripts/e2e_smoke.sh writes here
+logs/
+
+# Go module cache (vendored deps not used)
 vendor/
 
-# Go workspace file
-go.work
+# Environment
+.env
+.env.*
+!.env.example
 
-# IDE specific files
+# Editor / OS
 .idea/
 .vscode/
 *.swp
 *.swo
-*~
 .DS_Store
+Thumbs.db
 
-# Environment files
-.env
-.env.local
-
-# Log files
-*.log
-logs/
-
-# Temporary files
-tmp/
-temp/
-
-# Build artifacts
-dist/
-build/
-
-# Docker volumes
-docker/volumes/
-*.yml
-
-# Application specific
-app.log*
-server
-obs-brutal
-*.bak
-*.backup
-
-# Air hot reload
-.air.toml
-examples/standalone-config/compose/
-*.env
-
-compose/
+# Local AI tooling (orchestrator, skills, agent configs)
+.claude/

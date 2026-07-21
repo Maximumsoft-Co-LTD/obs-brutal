@@ -1,0 +1,94 @@
+[
+  {
+    "env": "dev",
+    "level": "DEBUG",
+    "msg": "create_user started",
+    "op": "create_user",
+    "service": "golden",
+    "user_id": "u-42"
+  },
+  {
+    "env": "dev",
+    "level": "DEBUG",
+    "msg": "create_user_phases started",
+    "op": "create_user_phases",
+    "service": "golden",
+    "user_id": "u-42"
+  },
+  {
+    "env": "dev",
+    "level": "DEBUG",
+    "msg": "validate started",
+    "op": "validate",
+    "service": "golden",
+    "user_id": "u-42"
+  },
+  {
+    "env": "dev",
+    "level": "INFO",
+    "msg": "validate completed",
+    "op": "validate",
+    "service": "golden",
+    "user_id": "u-42"
+  },
+  {
+    "env": "dev",
+    "level": "DEBUG",
+    "msg": "insert_db started",
+    "op": "insert_db",
+    "service": "golden",
+    "user_id": "u-42"
+  },
+  {
+    "env": "dev",
+    "level": "INFO",
+    "msg": "insert_db completed",
+    "op": "insert_db",
+    "service": "golden",
+    "user_id": "u-42"
+  },
+  {
+    "env": "dev",
+    "event": "user_created",
+    "level": "INFO",
+    "msg": "user_created",
+    "op": "create_user_phases",
+    "row_id": 1,
+    "service": "golden",
+    "user_id": "u-42"
+  },
+  {
+    "env": "dev",
+    "level": "DEBUG",
+    "msg": "publish started",
+    "op": "publish",
+    "service": "golden",
+    "user_id": "u-42"
+  },
+  {
+    "env": "dev",
+    "error": "topic offline",
+    "level": "ERROR",
+    "msg": "publish failed",
+    "op": "publish",
+    "service": "golden",
+    "user_id": "u-42"
+  },
+  {
+    "env": "dev",
+    "error": "topic offline",
+    "level": "ERROR",
+    "msg": "create_user_phases failed",
+    "op": "create_user_phases",
+    "service": "golden",
+    "user_id": "u-42"
+  },
+  {
+    "env": "dev",
+    "level": "INFO",
+    "msg": "create_user completed",
+    "op": "create_user",
+    "service": "golden",
+    "user_id": "u-42"
+  }
+]

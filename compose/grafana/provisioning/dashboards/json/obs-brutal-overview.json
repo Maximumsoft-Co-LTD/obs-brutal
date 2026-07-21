@@ -1,0 +1,36 @@
+{
+  "title": "OBS-Brutal Overview",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Log Count",
+      "targets": [
+        { "expr": "logs_total", "legendFormat": "logs" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Error Count",
+      "targets": [
+        { "expr": "errors_total", "legendFormat": "errors" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/metrics scrape duration",
+      "targets": [
+        { "expr": "promhttp_metric_handler_requests_total", "legendFormat": "requests" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Queue Size (approx)",
+      "targets": [
+        { "expr": "sum without(instance)(logs_total)" }
+      ]
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}
+
