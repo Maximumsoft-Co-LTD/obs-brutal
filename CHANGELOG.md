@@ -135,3 +135,5 @@ Goldens regenerate via `go test -run TestGoldenTrace ./boeng/ -update`.
 API freeze fails the build deliberately if a public symbol is removed
 or renamed — extend `freezeRefs` when adding new public surface; remove
 references only in a documented major-version bump.
+
+> Verified against `0d0a832` · 2026-07-22

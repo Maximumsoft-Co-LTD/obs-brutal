@@ -81,4 +81,4 @@ shipping; today's reproducible numbers supersede it.
 None at the moment. Add new ones here when they appear so future
 sessions don't re-discover them silently.
 
-> Verified against `8306889` · 2026-07-22
+> Verified against `0d0a832` · 2026-07-22

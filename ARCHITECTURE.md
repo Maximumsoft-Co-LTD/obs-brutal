@@ -118,4 +118,4 @@ with users is the `boeng/` tree only — see
 - AI transformation contract: [`boeng/transform_test.go`](./boeng/transform_test.go) +
   [`boeng/testdata/transform/`](./boeng/testdata/transform/)
 
-> Verified against `8306889` · 2026-07-22
+> Verified against `0d0a832` · 2026-07-22
