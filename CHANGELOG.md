@@ -63,6 +63,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - JSON writer now emits `user_id`, `module`, and `tenant_id` as
   top-level fields when promoted by the core (`Promote()`) — they were
   previously deleted from the entry without being re-emitted.
+- `TestBudget_RunErrorPath` time budget raised from 8 µs to 12 µs
+  (`budgetRunErrNsPerOp`), and the measurement now redirects stdout to
+  `/dev/null`: the error path writes a JSON error log per op, so the
+  benchmark-sized loop both flooded the CI log past its truncation
+  limit and measured GitHub's log pipe instead of the library — the
+  jobs failed on runner I/O speed rather than a real regression. The
+  budget still covers encode + write; alloc and byte budgets are
+  unchanged.
 
 ### Architectural
 - Established the **Runtime + Pipeline** architecture: business code
