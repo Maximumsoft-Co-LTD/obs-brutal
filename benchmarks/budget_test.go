@@ -25,6 +25,13 @@ const (
 	budgetRunAllocsPerOp = 50      // observed M2: 35
 	budgetRunBytesPerOp  = 4_096   // observed M2: 2832 B
 
+	// The error path additionally records the error on the span and
+	// writes a full JSON error log line to stdout per op — on 2-core
+	// CI-class runners that write dominates: observed 8.7 µs plain and
+	// 9.7 µs under -cover instrumentation. Budget 12 µs keeps the
+	// order-of-magnitude regression gate without failing on runner noise.
+	budgetRunErrNsPerOp = 12_000
+
 	budgetEmitNsPerOp     = 3_000  // observed M2: ~980 ns; budget 3 µs
 	budgetEmitAllocsPerOp = 30     // observed M2: 21
 	budgetEmitBytesPerOp  = 2_500  // observed M2: 1664 B
@@ -58,9 +65,10 @@ func TestBudget_RunErrorPath(t *testing.T) {
 			_ = boeng.Run(ctx, "budget_run_err", nil, func(ctx context.Context) error { return want })
 		}
 	})
-	// Error path is allowed to be slightly heavier (records error on
-	// span, error log) but must stay within the same order of magnitude.
-	assertBudget(t, "Run-error", result, budgetRunNsPerOp+2000, budgetRunAllocsPerOp+10, budgetRunBytesPerOp+1024)
+	// Error path is allowed to be heavier (records error on span,
+	// writes an error log) but must stay within the same order of
+	// magnitude — see budgetRunErrNsPerOp.
+	assertBudget(t, "Run-error", result, budgetRunErrNsPerOp, budgetRunAllocsPerOp+10, budgetRunBytesPerOp+1024)
 }
 
 func TestBudget_Emit(t *testing.T) {
