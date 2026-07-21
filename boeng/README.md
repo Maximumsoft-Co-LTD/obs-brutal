@@ -204,7 +204,7 @@ obs := boeng.Init(boeng.Config{
     OTel:         "otel-collector:4317",
     Loki:         "",
     Async:        true,
-    Level:        logtrc.InfoLevel,
+    Level:        boeng.InfoLevel,
     MetricLabels: []string{"user_type", "payment_channel"},
 })
 defer obs.Close()
