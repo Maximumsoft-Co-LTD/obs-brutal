@@ -1,0 +1,39 @@
+# Minimal single-binary Mimir for local development. Filesystem storage,
+# no multitenancy — metrics arrive from the OTel Collector via OTLP HTTP
+# at /otlp and are queried through the Prometheus-compatible API at
+# /prometheus (Grafana's "Mimir" datasource points there).
+target: all
+
+multitenancy_enabled: false
+
+server:
+  http_listen_port: 9009
+  grpc_listen_port: 9095
+
+common:
+  storage:
+    backend: filesystem
+    filesystem:
+      dir: /data
+
+blocks_storage:
+  storage_prefix: blocks
+  bucket_store:
+    sync_dir: /data/tsdb-sync
+  tsdb:
+    dir: /data/tsdb
+
+compactor:
+  data_dir: /data/compactor
+
+ruler_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/rules
+
+ingester:
+  ring:
+    replication_factor: 1
+
+usage_stats:
+  enabled: false

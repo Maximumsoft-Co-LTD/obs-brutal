@@ -3,10 +3,12 @@ package boeng
 import (
 	"context"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
+	outboundotel "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/otel"
 	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service/base"
 	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/logtrc"
 )
@@ -19,13 +21,13 @@ type Logger = logtrc.LogBrt
 
 // Config configures the global Obs handle. Pass to Init once at process start.
 type Config struct {
-	Service string       // service name (required for OTEL)
-	Version string       // service version, e.g. "1.0.0"
-	Env     string       // dev | uat | prod
-	OTel    string       // OTLP gRPC endpoint, "" disables OTEL
-	Loki    string       // Loki push URL, "" disables Loki sink
-	Async bool  // use async pipeline
-	Level Level // log level; zero = INFO
+	Service string // service name (required for OTEL)
+	Version string // service version, e.g. "1.0.0"
+	Env     string // dev | uat | prod
+	OTel    string // OTLP gRPC endpoint, "" disables OTEL
+	Loki    string // Loki push URL, "" disables Loki sink
+	Async   bool   // use async pipeline
+	Level   Level  // log level; zero = INFO
 
 	// IncludeZeroFields, when true, makes the reflection fallback emit
 	// zero-valued exported fields. Default false — zeros are skipped to
@@ -89,6 +91,17 @@ func Init(cfg Config) *Obs {
 			o.provider = newOTelShim(prov)
 		}
 	}
+	if o.provider == nil {
+		// No OTLP exporter configured, but tracing itself is not optional:
+		// build a tracer with no exporter so operations still get valid
+		// W3C span contexts. That is what makes trace_id/span_id appear in
+		// logs and traceparent propagate across process boundaries even
+		// without a collector — the behaviour Init documents. Nothing is
+		// exported; only the export is gated on Config.OTel.
+		if prov, err := outboundotel.NewOTelProvider(cfg.Service, cfg.Version, cfg.Env, ""); err == nil {
+			o.provider = newOTelShim(prov)
+		}
+	}
 	if o.log == nil {
 		if cfg.Async {
 			o.log = logtrc.NewAsyncLogBrt(level, sinks...)
@@ -130,7 +143,14 @@ func (o *Obs) Close() error {
 		s.Stop()
 	}
 	if o.provider != nil {
-		return o.provider.Shutdown(context.Background())
+		// Bound shutdown: TracerProvider/MeterProvider.Shutdown flushes
+		// pending spans/metrics through the OTLP exporter, which retries
+		// on a dead collector. With context.Background() a shutdown while
+		// the collector is unreachable blocked the process on exit for
+		// the exporter's full retry window (~1 min). A deadline caps that.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return o.provider.Shutdown(ctx)
 	}
 	return nil
 }

@@ -35,6 +35,11 @@ func Middleware() gin.HandlerFunc {
 			propagation.HeaderCarrier(c.Request.Header),
 		)
 
+		// FullPath() is the low-cardinality route template (e.g.
+		// "/users/:id"). On an unmatched route it is empty; fall back to
+		// the raw path so the op is still identifiable. Metric-name
+		// cardinality is bounded downstream by the fail-closed cap in
+		// boeng's metrics layer.
 		name := c.Request.Method + " " + c.FullPath()
 		if c.FullPath() == "" {
 			name = c.Request.Method + " " + c.Request.URL.Path

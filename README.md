@@ -405,3 +405,5 @@ four verbs or the operation-handle methods. See [`CHANGELOG.md`](./CHANGELOG.md)
 Governance: [COMPATIBILITY.md](./COMPATIBILITY.md) defines the v1.x
 semver contract. [ARCHITECTURE.md](./ARCHITECTURE.md) sketches the
 mental model in one diagram.
+
+> Verified against `0d0a832` · 2026-07-22

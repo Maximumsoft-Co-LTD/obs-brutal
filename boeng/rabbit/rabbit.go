@@ -29,6 +29,10 @@ func Publish(ctx context.Context, ch *amqp.Channel, exchange, key string, msg am
 	if msg.Headers == nil {
 		msg.Headers = amqp.Table{}
 	}
+	// The op/span name keeps exchange+key so traces and logs identify
+	// the destination. Metric-name cardinality (routing keys can embed
+	// ids) is bounded downstream by the fail-closed cap in boeng's
+	// metrics layer, not by dropping the key from the name here.
 	return boeng.Run(ctx, "rabbit.publish "+exchange+"/"+key,
 		publishFields{Exchange: exchange, RoutingKey: key},
 		func(opCtx context.Context) error {
@@ -77,10 +81,10 @@ type publishFields struct {
 
 func (p publishFields) LogFields() map[string]any {
 	return map[string]any{
-		"messaging.system":             "rabbitmq",
-		"messaging.destination":        p.Exchange,
-		"messaging.rabbitmq.routing":   p.RoutingKey,
-		"messaging.operation":          "publish",
+		"messaging.system":           "rabbitmq",
+		"messaging.destination":      p.Exchange,
+		"messaging.rabbitmq.routing": p.RoutingKey,
+		"messaging.operation":        "publish",
 	}
 }
 

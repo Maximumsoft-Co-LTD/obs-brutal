@@ -91,6 +91,21 @@ services:
           cpus: "0.20"
           memory: 128M
 
+  mimir:
+    image: grafana/mimir:2.12.0
+    command: ["-config.file=/etc/mimir.yaml"]
+    volumes:
+      - ./mimir.yaml:/etc/mimir.yaml:ro
+    ports:
+      - "9009:9009" # HTTP: /otlp ingest + /prometheus query API
+    networks: [obs]
+    profiles: ["full"]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.40"
+          memory: 512M
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.99.0
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
@@ -105,6 +120,7 @@ services:
       - tempo
       - jaeger
       - prometheus
+      - mimir
     networks: [obs]
     profiles: ["full"]
     deploy:

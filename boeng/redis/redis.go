@@ -72,9 +72,9 @@ type dialFields struct {
 
 func (d dialFields) LogFields() map[string]any {
 	return map[string]any{
-		"db.system":      "redis",
-		"net.peer.name":  d.Addr,
-		"net.transport":  d.Network,
+		"db.system":     "redis",
+		"net.peer.name": d.Addr,
+		"net.transport": d.Network,
 	}
 }
 
@@ -85,9 +85,9 @@ type commandFields struct {
 
 func (c commandFields) LogFields() map[string]any {
 	return map[string]any{
-		"db.system":     "redis",
-		"db.command":    c.Command,
-		"db.statement":  c.Args,
+		"db.system":    "redis",
+		"db.command":   c.Command,
+		"db.statement": c.Args,
 	}
 }
 
@@ -97,8 +97,8 @@ type pipelineFields struct {
 
 func (p pipelineFields) LogFields() map[string]any {
 	return map[string]any{
-		"db.system":            "redis",
-		"db.redis.pipeline.n":  p.N,
+		"db.system":           "redis",
+		"db.redis.pipeline.n": p.N,
 	}
 }
 

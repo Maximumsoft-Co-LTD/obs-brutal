@@ -371,4 +371,4 @@ Redis → Mongo and asserts every hop produces a boeng operation.
 - [`ai/guardrails.md`](./ai/guardrails.md) — explicit DO / DO NOT
   rules when writing boeng code.
 
-> Verified against `d6e1035` · 2026-06-28
+> Verified against `0d0a832` · 2026-07-22

@@ -65,24 +65,36 @@ func (sl *StrategyLogBrt) Fatalf(format string, args ...interface{}) {
 	sl.log(domain.FatalLevel, fmt.Sprintf(format, args...))
 }
 
-// Fluent chaining delegates to base
+// clone returns a copy that shares the strategy manager and async
+// pipeline but can carry its own field set. Chaining must never mutate
+// the receiver: the package-default logger is shared by every
+// operation, and in-place mutation bled fields (user_id, span_id, ...)
+// across unrelated operations.
+func (sl *StrategyLogBrt) clone() *StrategyLogBrt {
+	return &StrategyLogBrt{Base: sl.Base, strategies: sl.strategies, async: sl.async}
+}
+
+// Fluent chaining delegates to base on a clone of the receiver.
 func (sl *StrategyLogBrt) F(key string, value interface{}) b.LogBrt {
-	sl.Base = sl.Base.F(key, value).(*b.UnifiedLogBrt)
-	return sl
+	c := sl.clone()
+	c.Base = sl.Base.F(key, value).(*b.UnifiedLogBrt)
+	return c
 }
 func (sl *StrategyLogBrt) Fs(fields map[string]interface{}) b.LogBrt {
 	if len(fields) == 0 {
 		return sl
 	}
-	sl.Base = sl.Base.Fs(fields).(*b.UnifiedLogBrt)
-	return sl
+	c := sl.clone()
+	c.Base = sl.Base.Fs(fields).(*b.UnifiedLogBrt)
+	return c
 }
 func (sl *StrategyLogBrt) Ctx(ctx context.Context) b.LogBrt {
 	if ctx == nil {
 		return sl
 	}
-	sl.Base = sl.Base.Ctx(ctx).(*b.UnifiedLogBrt)
-	return sl
+	c := sl.clone()
+	c.Base = sl.Base.Ctx(ctx).(*b.UnifiedLogBrt)
+	return c
 }
 func (sl *StrategyLogBrt) TraceID(id string) b.LogBrt   { return sl.F("trace_id", id) }
 func (sl *StrategyLogBrt) UserID(id string) b.LogBrt    { return sl.F("user_id", id) }
