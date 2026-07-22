@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
+	outboundotel "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/otel"
 	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service/base"
 	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/logtrc"
 )
@@ -87,6 +88,17 @@ func Init(cfg Config) *Obs {
 		)
 		if err == nil && ot != nil {
 			o.log = ot
+			o.provider = newOTelShim(prov)
+		}
+	}
+	if o.provider == nil {
+		// No OTLP exporter configured, but tracing itself is not optional:
+		// build a tracer with no exporter so operations still get valid
+		// W3C span contexts. That is what makes trace_id/span_id appear in
+		// logs and traceparent propagate across process boundaries even
+		// without a collector — the behaviour Init documents. Nothing is
+		// exported; only the export is gated on Config.OTel.
+		if prov, err := outboundotel.NewOTelProvider(cfg.Service, cfg.Version, cfg.Env, ""); err == nil {
 			o.provider = newOTelShim(prov)
 		}
 	}

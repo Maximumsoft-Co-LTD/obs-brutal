@@ -167,7 +167,13 @@ func startOp(ctx context.Context, name string, subject any) (context.Context, fu
 
 	base := L(ctx).Fs(fields)
 	if sc := span.SpanContext(); sc.IsValid() {
-		base = base.TraceID(sc.TraceID().String()).F("span_id", sc.SpanID().String())
+		// One Fs (single field-map clone) instead of chained TraceID().F()
+		// — trace context is attached to every op now, so this is on the
+		// hot path for all callers.
+		base = base.Fs(map[string]any{
+			"trace_id": sc.TraceID().String(),
+			"span_id":  sc.SpanID().String(),
+		})
 	}
 	base.Debug(name + " started")
 
@@ -204,4 +210,3 @@ func mapToAttrs(fields map[string]any) []attribute.KeyValue {
 	}
 	return out
 }
-

@@ -36,14 +36,13 @@ func Middleware() gin.HandlerFunc {
 		)
 
 		// FullPath() is the low-cardinality route template (e.g.
-		// "/users/:id"), which is the correct, bounded op name. On an
-		// unmatched route it is empty; fall back to a fixed token rather
-		// than the raw URL path, which would put an id-bearing path into
-		// the metric name and blow up metric-name cardinality. The raw
-		// path stays in the http.path field.
+		// "/users/:id"). On an unmatched route it is empty; fall back to
+		// the raw path so the op is still identifiable. Metric-name
+		// cardinality is bounded downstream by the fail-closed cap in
+		// boeng's metrics layer.
 		name := c.Request.Method + " " + c.FullPath()
 		if c.FullPath() == "" {
-			name = c.Request.Method + " [unmatched]"
+			name = c.Request.Method + " " + c.Request.URL.Path
 		}
 
 		_ = boeng.Run(ctx, name, requestSubject(c), func(opCtx context.Context) error {

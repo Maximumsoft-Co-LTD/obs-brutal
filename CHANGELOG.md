@@ -58,6 +58,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`cli`, `cron`, `gin`, `http`, `mongo`, `rabbit`, `redis`).
 
 ### Fixed
+- Trace context now works without an OTLP exporter, fulfilling what
+  `Init` documents ("propagation works even when no OTLP exporter is
+  configured"). Previously a tracer was only installed when
+  `Config.OTel` was set, so with no collector `boeng.Run` minted no
+  span — meaning no `trace_id`/`span_id` in logs and no `traceparent`
+  to propagate across process boundaries. `Init` now always installs a
+  TracerProvider; only the OTLP *export* is gated on `Config.OTel`.
+  Without an exporter the tracer uses `NeverSample`, so spans are
+  non-recording (cheap) but still carry a valid W3C context — logs get
+  correlation ids and adapters (HTTP, RabbitMQ) propagate `traceparent`
+  with no collector. Per-op metric recording stays a no-op without a
+  collector (the global meter provider is only taken over when
+  exporting), so a no-OTel deployment keeps its prior metric cost.
+  Budget baselines rose accordingly (Run 26→37 allocs, Run-error
+  53→77) — the deterministic cost of attaching trace context to every
+  op; the golden log shape is unaffected (trace ids are redacted as
+  volatile).
 - `Obs.Close` bounds OTel shutdown with a 5s deadline instead of
   `context.Background()`. `TracerProvider`/`MeterProvider.Shutdown`
   flushes through the OTLP exporter, which retries on a dead collector,
@@ -86,21 +103,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   built from high-cardinality data minted a new metric series per
   unique value — leaking the map and able to OOM the downstream
   Prometheus/Mimir. The overflow counter is the operator's signal.
-- HTTP / Gin / RabbitMQ adapters no longer build high-cardinality op
-  (hence metric) names from request data — which also protects the
-  shared name budget above so a chatty adapter can't starve an app's
-  business-op metrics:
-  - `boenghttp.Middleware` names the op `HTTP <METHOD>` instead of
-    `<METHOD> <raw-path>` (plain net/http exposes no route template);
-    the full path stays in the `http.path` field. Use `Wrap` with an
-    explicit name for per-route metrics.
-  - `boenggin.Middleware`'s unmatched-route fallback is `<METHOD>
-    [unmatched]` instead of the raw URL path (matched routes still use
-    the bounded `c.FullPath()` template).
-  - `boengrabbit.Publish` names the op `rabbit.publish <exchange>`
-    instead of `<exchange>/<routing-key>`; the routing key (which
-    routinely embeds ids) stays in the `messaging.rabbitmq.routing`
-    field.
+  The HTTP / Gin / RabbitMQ adapters keep their specific, per-endpoint
+  op/span names (`GET /users/:id`, `rabbit.publish <exchange>/<key>`)
+  so traces and logs stay granular — metric-name cardinality is bounded
+  by the fail-closed cap above, not by flattening the names.
 - `Close` now actually flushes the async pipeline: `AsyncPipeline.Stop`
   drains queued entries and lets sink workers finish in-flight batches
   before the goroutines exit. Previously Stop cancelled the workers
@@ -132,6 +138,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Performance budget tests skip themselves under `-race` (the budgets
   are sized for uninstrumented builds), so `go test -race ./...` now
   runs clean as a whole.
+- Performance budget: the `ns/op` gate is now informational on CI
+  (`CI=true`) rather than a hard failure. Wall-clock swings 3–10x on
+  shared CI runners (no CPU pinning, noisy neighbours), so it failed on
+  machine noise, not real regressions. The deterministic `allocs/op`
+  and `bytes/op` gates — which catch genuine regressions — still fail
+  the build everywhere; `ns/op` remains a hard gate on developer
+  machines.
 - Alert sinks (Slack / Telegram / Opsgenie) hardened (found by a
   parallel bug-hunt over the untested sink packages, each finding
   reproduced by a failing test before the fix):
