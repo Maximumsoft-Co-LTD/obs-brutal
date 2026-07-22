@@ -67,8 +67,10 @@ Categories:
 - `BenchmarkComparison_*` — vs `log.Printf`, `slog.LogAttrs`, `boeng.Emit`,
   `boeng.Run`. The honest per-op cost of each layer.
 - `BenchmarkRun*` / `BenchmarkEnterStep` — boeng-only paths.
-- `TestBudget_*` — CI gates: fails if Run > 6 µs / 50 allocs / 4 KB, etc.
-  (see `benchmarks/budget_test.go`).
+- `TestBudget_*` — CI gates on the deterministic budgets: fails if Run
+  exceeds 50 allocs / 4 KB, etc. The `ns/op` budget is a hard gate on
+  developer machines but only informational on CI (`CI=true`), where
+  wall-clock swings on shared runners (see `benchmarks/budget_test.go`).
 - `TestBudget_MemoryUnderConcurrency` — proves per-op memory stays flat
   from 1 to 1000 goroutines.
 
@@ -81,4 +83,4 @@ shipping; today's reproducible numbers supersede it.
 None at the moment. Add new ones here when they appear so future
 sessions don't re-discover them silently.
 
-> Verified against `0d0a832` · 2026-07-22
+> Verified against `3529acc` · 2026-07-22

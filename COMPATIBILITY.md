@@ -98,13 +98,10 @@ rather than slipping the change into v1.x silently.
 
 | Go release | Status |
 | ---------- | ------ |
-| 1.25       | Primary — CI runs against this |
-| 1.24       | Best-effort — code targets 1.22+ features only |
-| 1.23       | Best-effort |
-| 1.22       | Minimum supported (matches the lowest version in `go.mod`) |
-| ≤ 1.21     | Unsupported |
+| 1.25       | Minimum supported — the `go` directive in `go.mod`; CI runs against this |
+| ≤ 1.24     | Unsupported — the module requires Go 1.25 (uses 1.25 features such as `clear()`) |
 
 Bumping the minimum supported Go version is itself a breaking change
 under this policy.
 
-> Verified against `0d0a832` · 2026-07-22
+> Verified against `3529acc` · 2026-07-22
