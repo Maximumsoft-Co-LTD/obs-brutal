@@ -166,3 +166,11 @@ questions" as they appear.
 <!-- HUMAN_AUTHORED_END -->
 
 > Verified against `0d0a832` · 2026-07-22
+
+<!-- claude-foundation:rules-imports:start (managed block — re-synced by install.sh; edit rules in .claude/rules/, not here) -->
+## Always-on fundamentals
+
+The `/dev` workflow's "by default" rules live in `.claude/rules/`. Recent Claude Code auto-loads that directory as project memory; the explicit import below is a fallback so the fundamentals still load on versions that do NOT auto-load `.claude/rules/`. If your Claude Code already auto-loads them, this import is redundant but harmless — delete this section if you ever see the router loaded twice.
+
+@.claude/rules/fundamentals.md
+<!-- claude-foundation:rules-imports:end -->
