@@ -79,10 +79,8 @@ declined regardless of how nice the implementation is:
 
 | Go release | Status |
 | ---------- | ------ |
-| 1.25 | Primary — CI runs against this |
-| 1.24, 1.23 | Best-effort |
-| 1.22 | Minimum supported (lowest in `go.mod`) |
-| ≤ 1.21 | Unsupported |
+| 1.25 | Minimum supported — the `go` directive in `go.mod`; CI runs against this |
+| ≤ 1.24 | Unsupported — the module requires Go 1.25 (uses 1.25 features such as `clear()`) |
 
 Bumping the minimum Go version is a breaking change per
 [`COMPATIBILITY.md`](./COMPATIBILITY.md).
@@ -112,7 +110,7 @@ repository.
 | P1 | Adding observability reduces business-code LOC by ≥80%     | `TestAITransformation_Fixtures` (each transform stays within a budget of 3–5 added lines) |
 | P2 | A coding agent can add observability without reading docs  | `boeng/testdata/transform/` (canonical before/after pairs the agent must reproduce; pinned by `TestAITransformation_Fixtures`) |
 | P3 | A legacy function adopts boeng without changing its signature | `TestMigration_SignatureUnchanged` + `TestMigration_BehaviorPreserved` |
-| P4 | A new developer learns the API in under 10 minutes         | 4 verbs (`Run` / `Enter` / `Emit` / `Init`) + 7 operation-handle methods (`Step` / `Log` / `Emit` / `Fail` / `Success` / `Close` / `CloseWith`). Each is a single English word. |
+| P4 | A new developer learns the API in under 10 minutes         | 4 verbs (`Run` / `Enter` / `Emit` / `Init`) + 8 operation-handle methods (`Step` / `Log` / `Emit` / `Fail` / `Success` / `Close` / `CloseWith` / `Context`). Each is a single English word. |
 | P5 | Business code never imports OpenTelemetry or any logger    | `TestAITransformation_Fixtures` enforces a banned-imports list; `boeng/api_freeze_test.go` documents the entire public surface |
 
 ## Human effort benchmark
@@ -145,7 +143,7 @@ observability:
 | Library                  | Concepts a developer must learn | Example list |
 | ------------------------ | ------------------------------- | ------------ |
 | OpenTelemetry SDK + slog | ~12                             | Tracer, Span, Context, Propagator, Exporter, Meter, Counter, Histogram, Attribute, Status, RecordError, Logger |
-| boeng                    | 3 + 7 op-handle methods         | Operation (the noun); Run / Enter / Emit (the verbs); op.Step / Log / Emit / Fail / Success / Close / CloseWith |
+| boeng                    | 3 + 8 op-handle methods         | Operation (the noun); Run / Enter / Emit (the verbs); op.Step / Log / Emit / Fail / Success / Close / CloseWith / Context |
 
 The boeng method names read as English sentences — `op.Step("validate", …)`,
 `op.Fail(err)`, `op.Close()` — which is the point.
@@ -188,7 +186,7 @@ Apple M2, sink-to-discard):
 | `log.Printf`         | ~70      | 3      | 48    | one unstructured line                     |
 | `slog.LogAttrs`      | ~520     | 0      | 0     | one structured JSON line                  |
 | `boeng.Emit`         | ~980     | 21     | 1664  | + event counter, log entry, span event    |
-| `boeng.Run`          | ~1.8 µs  | 35     | 2832  | + span open/close, duration histogram, panic recovery, per-op counters |
+| `boeng.Run`          | ~2.4 µs  | 48     | 4136  | + span open/close, duration histogram, panic recovery, per-op counters |
 
 The cost difference vs `slog` is what buys you trace + metric + panic
 correlation. If you'd otherwise write those by hand, boeng is the
@@ -406,4 +404,4 @@ Governance: [COMPATIBILITY.md](./COMPATIBILITY.md) defines the v1.x
 semver contract. [ARCHITECTURE.md](./ARCHITECTURE.md) sketches the
 mental model in one diagram.
 
-> Verified against `0d0a832` · 2026-07-22
+> Verified against `3529acc` · 2026-07-22

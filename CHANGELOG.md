@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [1.2.3] - 2026-07-22
+
+First tagged release to ship the `boeng` Operation Runtime. Everything
+listed below first appeared in this tag. Note: replacing the public
+`logtrc` surface with `boeng` is a breaking change relative to the
+earlier tags, so under strict SemVer this would warrant a major bump —
+it shipped as `v1.2.3` continuing the existing `v1.x` line.
+
+Tags `v1.0.0`–`v1.2.2` (2025-08-18 … 2025-09-11) predate `boeng`. They
+covered the standalone `logtrc` logging library that now lives under
+`internal/logtrc`; those releases are not itemized here — see the git
+history (`git log v1.0.0..v1.2.2`) for that era.
+
 ### Added
 - `boeng` Operation Runtime package — single public entry point.
 - Four top-level verbs: `Init`, `Run` (+ `RunR`), `Enter` / `EnterCtx`,
@@ -262,4 +277,7 @@ API freeze fails the build deliberately if a public symbol is removed
 or renamed — extend `freezeRefs` when adding new public surface; remove
 references only in a documented major-version bump.
 
-> Verified against `0d0a832` · 2026-07-22
+[Unreleased]: https://github.com/Maximumsoft-Co-LTD/obs-brutal/compare/v1.2.3...HEAD
+[1.2.3]: https://github.com/Maximumsoft-Co-LTD/obs-brutal/releases/tag/v1.2.3
+
+> Verified against `3529acc` · 2026-07-22

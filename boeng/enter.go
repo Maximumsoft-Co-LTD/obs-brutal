@@ -121,7 +121,7 @@ func (o *Op) Success() {
 // _panic_total), panic recovery. Use it to instrument the phases of a
 // larger operation without breaking up the function:
 //
-//	op := boeng.Enter(ctx, "create_user", usr)
+//	op := boeng.Enter("create_user", usr)
 //	defer op.Close()
 //	if err := op.Step("validate", func() error { return validate(usr) }); err != nil {
 //	    return err
