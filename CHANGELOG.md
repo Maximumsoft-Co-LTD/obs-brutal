@@ -58,6 +58,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`cli`, `cron`, `gin`, `http`, `mongo`, `rabbit`, `redis`).
 
 ### Fixed
+- `RateSampler.ShouldSample` is now concurrency-safe. It ran on the
+  OTel-mode logging hot path (every entry passes through the strategy
+  Manager, which calls samplers under only a read lock, so many
+  goroutines invoke it at once) yet consulted a private `*rand.Rand`,
+  which is not safe for concurrent use — a data race under `-race` and
+  undefined behaviour under load. Access is now mutex-guarded, and the
+  rate=1 (always-on, the default) and rate=0 cases short-circuit the
+  rng entirely. `AdaptiveSampler` already used the (safe) global rand.
 - Metric-name cardinality now fails closed (the second half of G3).
   `opMetricsFor` / `eventMetricsFor` cap the number of distinct
   sanitized metric names at `maxDistinctMetricNames` (512); past the
