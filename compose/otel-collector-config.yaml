@@ -9,6 +9,8 @@ exporters:
     endpoint: tempo:4317
     tls:
       insecure: true
+  otlphttp/mimir:
+    endpoint: http://mimir:9009/otlp
   logging:
     loglevel: warn
   prometheus:
@@ -28,7 +30,7 @@ service:
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [prometheus]
+      exporters: [prometheus, otlphttp/mimir]
     logs:
       receivers: [otlp]
       processors: [batch]

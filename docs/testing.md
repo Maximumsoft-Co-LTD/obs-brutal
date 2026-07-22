@@ -129,4 +129,4 @@ symbol is in the freeze list** (currently 100%, enforced by layer 4).
 
 None. Add new ones here when they appear.
 
-> Verified against `d6e1035` · 2026-06-27
+> Verified against `0d0a832` · 2026-07-22

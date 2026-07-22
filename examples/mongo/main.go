@@ -24,9 +24,11 @@ import (
 func main() {
 	defer boeng.Init(boeng.Config{Service: "mongo_demo", Env: "dev"}).Close()
 
-	uri := os.Getenv("MONGO_URI")
-	if uri == "" {
-		uri = "mongodb://localhost:27017"
+	// MONGO_HOST is the repo-wide convention (see boeng/mongo
+	// integration tests and .github/workflows/test.yml): host:port only.
+	uri := "mongodb://localhost:27017"
+	if h := os.Getenv("MONGO_HOST"); h != "" {
+		uri = "mongodb://" + h
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

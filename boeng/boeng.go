@@ -3,6 +3,7 @@ package boeng
 import (
 	"context"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -19,13 +20,13 @@ type Logger = logtrc.LogBrt
 
 // Config configures the global Obs handle. Pass to Init once at process start.
 type Config struct {
-	Service string       // service name (required for OTEL)
-	Version string       // service version, e.g. "1.0.0"
-	Env     string       // dev | uat | prod
-	OTel    string       // OTLP gRPC endpoint, "" disables OTEL
-	Loki    string       // Loki push URL, "" disables Loki sink
-	Async bool  // use async pipeline
-	Level Level // log level; zero = INFO
+	Service string // service name (required for OTEL)
+	Version string // service version, e.g. "1.0.0"
+	Env     string // dev | uat | prod
+	OTel    string // OTLP gRPC endpoint, "" disables OTEL
+	Loki    string // Loki push URL, "" disables Loki sink
+	Async   bool   // use async pipeline
+	Level   Level  // log level; zero = INFO
 
 	// IncludeZeroFields, when true, makes the reflection fallback emit
 	// zero-valued exported fields. Default false — zeros are skipped to
@@ -130,7 +131,14 @@ func (o *Obs) Close() error {
 		s.Stop()
 	}
 	if o.provider != nil {
-		return o.provider.Shutdown(context.Background())
+		// Bound shutdown: TracerProvider/MeterProvider.Shutdown flushes
+		// pending spans/metrics through the OTLP exporter, which retries
+		// on a dead collector. With context.Background() a shutdown while
+		// the collector is unreachable blocked the process on exit for
+		// the exporter's full retry window (~1 min). A deadline caps that.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return o.provider.Shutdown(ctx)
 	}
 	return nil
 }

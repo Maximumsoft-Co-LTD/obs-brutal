@@ -3,6 +3,7 @@ package strategy
 import (
 	"math/rand"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
@@ -29,8 +30,14 @@ func (lf *LevelFilter) Configure(cfg map[string]interface{}) error {
 	return nil
 }
 
-// RateSampler samples logs randomly by rate [0,1]
+// RateSampler samples logs randomly by rate [0,1].
+//
+// ShouldSample runs on the logging hot path and Manager.ProcessEntry
+// calls it under only a read lock, so several goroutines invoke it
+// concurrently. A *rand.Rand is not safe for concurrent use, so access
+// to rng (and rate) is guarded by mu.
 type RateSampler struct {
+	mu   sync.Mutex
 	rate float64
 	rng  *rand.Rand
 }
@@ -59,6 +66,16 @@ func NewRateSamplerWithRNG(rate float64, rng *rand.Rand) port.SamplerStrategy {
 	return &RateSampler{rate: rate, rng: rng}
 }
 func (rs *RateSampler) ShouldSample(_ *domain.LogEntry) bool {
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	// Short-circuit the extremes so the common rate=1 (always-on) and
+	// rate=0 cases never touch the rng — cheaper and race-free.
+	if rs.rate >= 1 {
+		return true
+	}
+	if rs.rate <= 0 {
+		return false
+	}
 	if rs.rng == nil {
 		rs.rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	}
@@ -72,7 +89,9 @@ func (rs *RateSampler) Configure(cfg map[string]interface{}) error {
 		} else if v > 1 {
 			v = 1
 		}
+		rs.mu.Lock()
 		rs.rate = v
+		rs.mu.Unlock()
 	}
 	return nil
 }

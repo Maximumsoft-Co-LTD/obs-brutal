@@ -51,11 +51,117 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   back to reflection.
 - `Config.Masking` removed — it was a TODO field that never wired into
   anything.
-- All non-`boeng` example programs (`basic`, `gin`, `http`, `mongo`,
-  `redis`, etc.) removed. The three remaining examples (`boeng`,
-  `boeng_ctx`, `boeng_legacy`) cover the three documented usage modes.
+- Pre-v1 demo programs (`basic`, `demo_all`, `promtail_file`,
+  `otel_loki`, etc.) removed along with `scripts/demo.sh`. The examples
+  that remain are `boeng`, `boeng_ctx`, `boeng_legacy` (the three
+  documented usage modes) plus one small program per adapter
+  (`cli`, `cron`, `gin`, `http`, `mongo`, `rabbit`, `redis`).
 
 ### Fixed
+- `Obs.Close` bounds OTel shutdown with a 5s deadline instead of
+  `context.Background()`. `TracerProvider`/`MeterProvider.Shutdown`
+  flushes through the OTLP exporter, which retries on a dead collector,
+  so an unbounded context made process exit block for the exporter's
+  full retry window (~1 min) whenever the collector was unreachable at
+  shutdown. Verified: against a black-hole endpoint Close now returns
+  in ~5s instead of hanging.
+- `configureMetrics` (called by `Init`) now resets the per-op and
+  per-event metric instrument caches. `Init` installs a fresh global
+  MeterProvider, so without the reset a second `Init` (hot-reload,
+  tests) left cached instruments bound to the previous, now shut-down
+  provider — their metrics silently stopped being recorded.
+- `RateSampler.ShouldSample` is now concurrency-safe. It ran on the
+  OTel-mode logging hot path (every entry passes through the strategy
+  Manager, which calls samplers under only a read lock, so many
+  goroutines invoke it at once) yet consulted a private `*rand.Rand`,
+  which is not safe for concurrent use — a data race under `-race` and
+  undefined behaviour under load. Access is now mutex-guarded, and the
+  rate=1 (always-on, the default) and rate=0 cases short-circuit the
+  rng entirely. `AdaptiveSampler` already used the (safe) global rand.
+- Metric-name cardinality now fails closed (the second half of G3).
+  `opMetricsFor` / `eventMetricsFor` cap the number of distinct
+  sanitized metric names at `maxDistinctMetricNames` (512); past the
+  cap, names route to a shared `overflow` series instead of minting a
+  new one. Previously the caches were unbounded maps, so any op name
+  built from high-cardinality data minted a new metric series per
+  unique value — leaking the map and able to OOM the downstream
+  Prometheus/Mimir. The overflow counter is the operator's signal.
+- HTTP / Gin / RabbitMQ adapters no longer build high-cardinality op
+  (hence metric) names from request data — which also protects the
+  shared name budget above so a chatty adapter can't starve an app's
+  business-op metrics:
+  - `boenghttp.Middleware` names the op `HTTP <METHOD>` instead of
+    `<METHOD> <raw-path>` (plain net/http exposes no route template);
+    the full path stays in the `http.path` field. Use `Wrap` with an
+    explicit name for per-route metrics.
+  - `boenggin.Middleware`'s unmatched-route fallback is `<METHOD>
+    [unmatched]` instead of the raw URL path (matched routes still use
+    the bounded `c.FullPath()` template).
+  - `boengrabbit.Publish` names the op `rabbit.publish <exchange>`
+    instead of `<exchange>/<routing-key>`; the routing key (which
+    routinely embeds ids) stays in the `messaging.rabbitmq.routing`
+    field.
+- `Close` now actually flushes the async pipeline: `AsyncPipeline.Stop`
+  drains queued entries and lets sink workers finish in-flight batches
+  before the goroutines exit. Previously Stop cancelled the workers
+  outright, so a process shorter than the 100 ms flush interval (any
+  CLI, cron job, or crashing service) emitted **no logs at all** in
+  OTel/Async mode. Writes issued after Stop fall back to the
+  synchronous path instead of vanishing into a dead queue.
+- Fluent chaining (`F` / `Fs` / `Ctx`) on the OTel-mode logger derives
+  a new logger instead of mutating the shared one. In-place mutation
+  meant every field ever attached (`user_id`, `error`, `span_id`, …)
+  leaked into all subsequent operations' log lines — unrelated ops
+  reported each other's errors and correlation ids. `StrategyLogBrt`
+  and `OTelLogBrt` now clone on chain, matching the underlying
+  `UnifiedLogBrt` semantics.
+- Per-operation metrics now reach the OTLP collector: the meter
+  provider gained an `otlpmetricgrpc` periodic reader (10 s interval,
+  flushed on `Close`) targeting the same `Config.OTel` endpoint as
+  traces. Previously metrics only fed an in-process Prometheus
+  registry that nothing scraped, so `<op>_total` / `_duration_ms` /
+  `_error_total` / `_panic_total` never appeared in the documented
+  compose stack.
+- Loki sink outage behavior hardened (found by failure-mode testing):
+  the retry buffer is now capped at 10× the batch size (oldest entries
+  drop, counted) instead of growing unboundedly for the duration of an
+  outage; a post-failure backoff gate stops every `Write` from
+  attempting a synchronous connection while Loki is down; `Close` is
+  idempotent instead of panicking on a double close; and the flush
+  worker no longer deadlocks on a nil channel after `Close`.
+- Performance budget tests skip themselves under `-race` (the budgets
+  are sized for uninstrumented builds), so `go test -race ./...` now
+  runs clean as a whole.
+- Alert sinks (Slack / Telegram / Opsgenie) hardened (found by a
+  parallel bug-hunt over the untested sink packages, each finding
+  reproduced by a failing test before the fix):
+  - Transport errors no longer leak the secret-bearing request URL
+    (Telegram bot token, Slack webhook) into the error returned from
+    `Write`; failures are reported by category only.
+  - Permanent 4xx responses are no longer retried (a revoked webhook
+    was hammered 5×/entry); only 5xx and 429 are retryable.
+  - The retry loop is bounded by a total time budget and per-attempt
+    context timeout, so a dead alert endpoint can no longer stall the
+    synchronous log path for ~28s per entry.
+  - `Configure` now locks, fixing a data race with `Write` on the
+    webhook/token/endpoint fields.
+- `async.Sink` (async wrapper) fixed: `Close` now drains queued entries
+  instead of racing its workers into dropping them, `Write` after
+  `Close` drops quietly instead of panicking on a closed channel,
+  `Close` propagates to the wrapped inner sink, and `Close` is
+  idempotent. The broken `WithTimeout` helper (auto-closed the sink
+  permanently while claiming "periodic flush") was removed.
+- `buffered.BufferedSink` fixed: `Close` is idempotent (double close no
+  longer panics), and `flushLocked` no longer swallows inner-sink write
+  errors while discarding the entries — failed entries are retained for
+  the next flush (bounded, oldest-dropped) and the error is surfaced.
+- File sinks fixed: `LumberjackSink.Write` captures the logger under the
+  lock (no more nil-panic/race when `Configure` rebuilds it);
+  `OptimalFileSink` locks `Configure`, honors a filename change after
+  the first write, no longer truncates the live log when a rotation
+  rename fails (append-only reopen), no longer wedges permanently after
+  a failed rotation reopen, and both file sinks now implement `Close`
+  (the file handle was previously leaked on shutdown).
 - `Init` called twice now closes the previous default before replacing
   it, so the old async pipeline + OTel exporter no longer leak.
 - `MaskEmail` operates on runes instead of bytes; multi-byte local
@@ -71,6 +177,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   jobs failed on runner I/O speed rather than a real regression. The
   budget still covers encode + write; alloc and byte budgets are
   unchanged.
+
+### Compose stack
+- Added Grafana Mimir (`:9009`) to the `full` profile as a long-term
+  metrics backend. The OTel Collector's metrics pipeline now exports to
+  both its local Prometheus endpoint and Mimir via OTLP HTTP
+  (`otlphttp/mimir`), and Grafana ships a provisioned `Mimir`
+  datasource pointing at Mimir's Prometheus-compatible query API.
+  Application code is unchanged — metrics already leave the process as
+  OTLP to `Config.OTel`.
 
 ### Architectural
 - Established the **Runtime + Pipeline** architecture: business code
@@ -133,3 +248,5 @@ Goldens regenerate via `go test -run TestGoldenTrace ./boeng/ -update`.
 API freeze fails the build deliberately if a public symbol is removed
 or renamed — extend `freezeRefs` when adding new public surface; remove
 references only in a documented major-version bump.
+
+> Verified against `0d0a832` · 2026-07-22

@@ -84,9 +84,10 @@ docker compose --profile full up -d   # adds Tempo, Jaeger, Prometheus, OTel Col
 ```
 
 Default endpoints: Grafana `:3000`, Prometheus `:9090`, Loki `:3100`,
-Tempo `:3200`, Jaeger UI `:16686`, OTLP gRPC `:4317`, Prometheus scrape
-`:8889`, ClickHouse HTTP `:8123`, Wiremock `:8089`. Promtail tails
-`../logs` mounted to `/var/log/app`.
+Tempo `:3200`, Mimir `:9009` (OTLP ingest at `/otlp`, PromQL at
+`/prometheus`), Jaeger UI `:16686`, OTLP gRPC `:4317`, Prometheus
+scrape `:8889`, ClickHouse HTTP `:8123`, Wiremock `:8089`. Promtail
+tails `../logs` mounted to `/var/log/app`.
 
 `scripts/e2e_smoke.sh` runs the three boeng demo examples in the
 background and dumps output to `logs/<name>.{out,err}`.
@@ -164,4 +165,12 @@ questions" as they appear.
 
 <!-- HUMAN_AUTHORED_END -->
 
-> Verified against `d6e1035` · 2026-06-28
+> Verified against `0d0a832` · 2026-07-22
+
+<!-- claude-foundation:rules-imports:start (managed block — re-synced by install.sh; edit rules in .claude/rules/, not here) -->
+## Always-on fundamentals
+
+The `/dev` workflow's "by default" rules live in `.claude/rules/`. Recent Claude Code auto-loads that directory as project memory; the explicit import below is a fallback so the fundamentals still load on versions that do NOT auto-load `.claude/rules/`. If your Claude Code already auto-loads them, this import is redundant but harmless — delete this section if you ever see the router loaded twice.
+
+@.claude/rules/fundamentals.md
+<!-- claude-foundation:rules-imports:end -->

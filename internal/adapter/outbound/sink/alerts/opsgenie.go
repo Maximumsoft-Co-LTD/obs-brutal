@@ -2,17 +2,19 @@
 package alerts
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
+	"time"
+
 	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
 	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
-	"time"
 )
 
 type OpsgenieSink struct {
 	port.SinkBase
+	mu                         sync.RWMutex
 	apiKey, endpoint, priority string
 	client                     *http.Client
 }
@@ -22,6 +24,8 @@ func NewOpsgenieSink(apiKey string) port.Sink {
 }
 func (s *OpsgenieSink) Name() string { return "opsgenie" }
 func (s *OpsgenieSink) Configure(cfg map[string]interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if v, ok := cfg["api_key"].(string); ok {
 		s.apiKey = v
 	}
@@ -34,23 +38,21 @@ func (s *OpsgenieSink) Configure(cfg map[string]interface{}) error {
 	return nil
 }
 func (s *OpsgenieSink) Write(entry *domain.LogEntry) error {
-	if entry == nil || s.apiKey == "" {
+	if entry == nil {
 		return nil
 	}
-	payload := map[string]interface{}{"message": fmt.Sprintf("[%s] %s", entry.Level.String(), entry.Msg), "priority": s.priority}
-	body, _ := json.Marshal(payload)
-	return retryBackoff(func() error {
-		req, _ := http.NewRequest("POST", s.endpoint, bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "GenieKey "+s.apiKey)
-		resp, err := s.client.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode >= 300 {
-			return fmt.Errorf("opsgenie status: %s", resp.Status)
-		}
+	s.mu.RLock()
+	apiKey, endpoint, priority := s.apiKey, s.endpoint, s.priority
+	s.mu.RUnlock()
+	if apiKey == "" {
 		return nil
+	}
+	payload := map[string]interface{}{"message": fmt.Sprintf("[%s] %s", entry.Level.String(), entry.Msg), "priority": priority}
+	body, _ := json.Marshal(payload)
+	return deliver(s.client, postConfig{
+		name:    "opsgenie",
+		url:     endpoint,
+		headers: map[string]string{"Authorization": "GenieKey " + apiKey},
+		body:    body,
 	})
 }

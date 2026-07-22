@@ -117,3 +117,5 @@ with users is the `boeng/` tree only — see
   [`boeng/testdata/golden_create_user.json`](./boeng/testdata/golden_create_user.json)
 - AI transformation contract: [`boeng/transform_test.go`](./boeng/transform_test.go) +
   [`boeng/testdata/transform/`](./boeng/testdata/transform/)
+
+> Verified against `0d0a832` · 2026-07-22

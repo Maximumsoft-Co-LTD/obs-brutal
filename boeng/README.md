@@ -204,7 +204,7 @@ obs := boeng.Init(boeng.Config{
     OTel:         "otel-collector:4317",
     Loki:         "",
     Async:        true,
-    Level:        logtrc.InfoLevel,
+    Level:        boeng.InfoLevel,
     MetricLabels: []string{"user_type", "payment_channel"},
 })
 defer obs.Close()
@@ -350,3 +350,5 @@ adds new pipeline stages (audit, profiling, sampling tuning) without
 changing the four verbs or the operation-handle methods. The
 `TestPublicAPI` freeze test enforces that no exported identifier
 disappears without an intentional, documented major-version change.
+
+> Verified against `0d0a832` · 2026-07-22

@@ -18,6 +18,20 @@ import (
 // environment count are small) so they're safe defaults.
 var defaultMetricLabels = []string{"service", "env"}
 
+// maxDistinctMetricNames caps how many distinct sanitized op/event names
+// may each mint their own metric series. It is the name-cardinality half
+// of G3: the label allowlist bounds label cardinality, and this bounds
+// metric-name cardinality.
+//
+// Op names flow from callers — and adapters build them from request data
+// (an HTTP path with an embedded id, a RabbitMQ routing key with an
+// order id). Without a cap, one such call site mints a new metric series
+// per unique value, which both leaks the cache map without bound and can
+// OOM the downstream Prometheus/Mimir. Past the cap, further names route
+// to a shared "overflow" series (fail-closed) whose own counter is the
+// operator's signal that a high-cardinality name is in play.
+const maxDistinctMetricNames = 512
+
 // opMetricSet holds the per-operation OTel instruments. They are created
 // lazily the first time an op fires and cached for the lifetime of the
 // process, because OTel SDK instruments are designed to be re-used.
@@ -42,6 +56,10 @@ var (
 	labelAllowed  = toSet(defaultMetricLabels)
 	staticAttrs   []attribute.KeyValue
 	staticLabelKV = map[string]attribute.KeyValue{}
+
+	// Shared fail-closed sinks used once the distinct-name cap is hit.
+	opOverflow  *opMetricSet
+	evtOverflow *eventMetricSet
 )
 
 func toSet(keys []string) map[string]struct{} {
@@ -61,6 +79,17 @@ func configureMetrics(cfg Config) {
 	allowed := append([]string(nil), defaultMetricLabels...)
 	allowed = append(allowed, cfg.MetricLabels...)
 	labelAllowed = toSet(allowed)
+
+	// Init installs a fresh global MeterProvider. Drop cached instruments
+	// so they rebind to the new provider on next use — otherwise a second
+	// Init (hot-reload, tests) leaves ops writing to the previous, now
+	// shut-down provider and their metrics silently vanish.
+	metricsMu.Lock()
+	opMetricsCache = map[string]*opMetricSet{}
+	evtMetricsCache = map[string]*eventMetricSet{}
+	opOverflow = nil
+	evtOverflow = nil
+	metricsMu.Unlock()
 
 	staticAttrs = staticAttrs[:0]
 	staticLabelKV = map[string]attribute.KeyValue{}
@@ -89,6 +118,14 @@ func opMetricsFor(name string) *opMetricSet {
 	defer metricsMu.Unlock()
 	if m, ok := opMetricsCache[safe]; ok {
 		return m
+	}
+	// Fail closed once the distinct-name budget is spent: route to a
+	// shared overflow series instead of minting (and caching) another.
+	if len(opMetricsCache) >= maxDistinctMetricNames {
+		if opOverflow == nil {
+			opOverflow = newOpMetricSet("overflow")
+		}
+		return opOverflow
 	}
 	m := newOpMetricSet(safe)
 	opMetricsCache[safe] = m
@@ -128,13 +165,24 @@ func eventMetricsFor(name string) *eventMetricSet {
 	if m, ok := evtMetricsCache[safe]; ok {
 		return m
 	}
+	if len(evtMetricsCache) >= maxDistinctMetricNames {
+		if evtOverflow == nil {
+			evtOverflow = newEventMetricSet("overflow")
+		}
+		return evtOverflow
+	}
+	s := newEventMetricSet(safe)
+	evtMetricsCache[safe] = s
+	return s
+}
+
+func newEventMetricSet(safe string) *eventMetricSet {
 	meter := otel.GetMeterProvider().Meter("boeng")
 	c, err := meter.Int64Counter(safe + "_total")
 	s := &eventMetricSet{}
 	if err == nil {
 		s.total = c
 	}
-	evtMetricsCache[safe] = s
 	return s
 }
 

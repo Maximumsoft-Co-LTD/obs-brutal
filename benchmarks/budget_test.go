@@ -188,6 +188,9 @@ func TestBudget_MemoryUnderConcurrency(t *testing.T) {
 // which dimension broke.
 func assertBudget(t *testing.T, label string, r testing.BenchmarkResult, ns, allocs int64, bytes int64) {
 	t.Helper()
+	if raceEnabled {
+		t.Skip("time budgets are sized for uninstrumented builds; skipped under -race")
+	}
 	t.Logf("[budget %s] ns=%d (≤%d) allocs=%d (≤%d) bytes=%d (≤%d)",
 		label, r.NsPerOp(), ns, r.AllocsPerOp(), allocs, r.AllocedBytesPerOp(), bytes)
 	if r.NsPerOp() > ns {

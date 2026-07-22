@@ -10,14 +10,15 @@ import (
 
 type BufferedSink struct {
 	port.SinkBase
-	buffer    []*domain.LogEntry
-	maxSize   int
-	timeout   time.Duration
-	lastFlush time.Time
-	mu        sync.Mutex
-	stopCh    chan struct{}
-	wg        sync.WaitGroup
-	inner     port.Sink
+	buffer     []*domain.LogEntry
+	maxSize    int
+	timeout    time.Duration
+	lastFlush  time.Time
+	mu         sync.Mutex
+	stopCh     chan struct{}
+	closedOnce sync.Once
+	wg         sync.WaitGroup
+	inner      port.Sink
 }
 
 func NewBufferedSink() port.Sink { return NewBufferedSinkWith(1000, 100*time.Millisecond) }
@@ -50,34 +51,60 @@ func (s *BufferedSink) Write(entry *domain.LogEntry) error {
 	return nil
 }
 func (s *BufferedSink) Close() error {
-	s.mu.Lock()
-	if s.stopCh != nil {
-		close(s.stopCh)
-	}
-	s.mu.Unlock()
-	s.wg.Wait()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.flushLocked(); err != nil {
-		return err
-	}
-	if s.inner != nil {
-		_ = s.inner.Close()
-	}
-	return nil
+	var err error
+	s.closedOnce.Do(func() {
+		s.mu.Lock()
+		if s.stopCh != nil {
+			close(s.stopCh)
+		}
+		s.mu.Unlock()
+		s.wg.Wait()
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		err = s.flushLocked()
+		if s.inner != nil {
+			if cerr := s.inner.Close(); cerr != nil && err == nil {
+				err = cerr
+			}
+		}
+	})
+	return err
 }
+
+// retainCap bounds how many failed entries flushLocked keeps for retry
+// during an inner-sink outage, so a prolonged outage cannot grow the
+// buffer without limit.
+func (s *BufferedSink) retainCap() int {
+	if s.maxSize > 0 {
+		return s.maxSize * 10
+	}
+	return 10000
+}
+
 func (s *BufferedSink) flushLocked() error {
+	s.lastFlush = time.Now()
 	if s.inner == nil {
 		s.buffer = s.buffer[:0]
-		s.lastFlush = time.Now()
 		return nil
 	}
+	// Attempt every entry. Entries whose write fails are kept for the
+	// next flush instead of being discarded (silent loss) — bounded by
+	// retainCap so an outage can't grow memory without limit.
+	var firstErr error
+	var remaining []*domain.LogEntry
 	for _, e := range s.buffer {
-		_ = s.inner.Write(e)
+		if err := s.inner.Write(e); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			remaining = append(remaining, e)
+		}
 	}
-	s.buffer = s.buffer[:0]
-	s.lastFlush = time.Now()
-	return nil
+	if limit := s.retainCap(); len(remaining) > limit {
+		remaining = remaining[len(remaining)-limit:]
+	}
+	s.buffer = append(s.buffer[:0], remaining...)
+	return firstErr
 }
 func (s *BufferedSink) startFlusher() {
 	s.mu.Lock()

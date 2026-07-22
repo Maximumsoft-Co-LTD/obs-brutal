@@ -29,7 +29,12 @@ func Publish(ctx context.Context, ch *amqp.Channel, exchange, key string, msg am
 	if msg.Headers == nil {
 		msg.Headers = amqp.Table{}
 	}
-	return boeng.Run(ctx, "rabbit.publish "+exchange+"/"+key,
+	// Name the op by exchange only. Routing keys routinely embed ids
+	// (e.g. "user.123.created"), so including the key in the op name —
+	// hence the metric name — explodes metric-name cardinality. The
+	// exchange is the bounded, OTel-conventional destination; the
+	// routing key stays in the messaging.rabbitmq.routing field.
+	return boeng.Run(ctx, "rabbit.publish "+exchange,
 		publishFields{Exchange: exchange, RoutingKey: key},
 		func(opCtx context.Context) error {
 			otel.GetTextMapPropagator().Inject(opCtx, tableCarrier(msg.Headers))
@@ -77,10 +82,10 @@ type publishFields struct {
 
 func (p publishFields) LogFields() map[string]any {
 	return map[string]any{
-		"messaging.system":             "rabbitmq",
-		"messaging.destination":        p.Exchange,
-		"messaging.rabbitmq.routing":   p.RoutingKey,
-		"messaging.operation":          "publish",
+		"messaging.system":           "rabbitmq",
+		"messaging.destination":      p.Exchange,
+		"messaging.rabbitmq.routing": p.RoutingKey,
+		"messaging.operation":        "publish",
 	}
 }
 

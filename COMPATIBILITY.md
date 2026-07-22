@@ -106,3 +106,5 @@ rather than slipping the change into v1.x silently.
 
 Bumping the minimum supported Go version is itself a breaking change
 under this policy.
+
+> Verified against `0d0a832` · 2026-07-22

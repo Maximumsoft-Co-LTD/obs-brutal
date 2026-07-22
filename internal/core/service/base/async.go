@@ -27,7 +27,15 @@ type AsyncPipeline struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
-	wg     sync.WaitGroup
+
+	// Shutdown is two-phase so Stop() can drain instead of drop: quit
+	// tells the batch worker to drain logChan and flush, then batchChan
+	// is closed so sink workers finish everything already batched.
+	quit     chan struct{}
+	stopped  atomic.Bool
+	stopOnce sync.Once
+	batchWg  sync.WaitGroup
+	sinkWg   sync.WaitGroup
 
 	sinks []port.Sink
 
@@ -63,6 +71,7 @@ func NewAsyncPipeline(batchSize, workerCount int, flushTimeout time.Duration, si
 		workerCount:  workerCount,
 		ctx:          ctx,
 		cancel:       cancel,
+		quit:         make(chan struct{}),
 		sinks:        sinks,
 		batchPool:    sync.Pool{New: func() interface{} { return make([]*domain.LogEntry, 0, batchSize) }},
 	}
@@ -74,6 +83,11 @@ func NewAsyncPipeline(batchSize, workerCount int, flushTimeout time.Duration, si
 // WriteAsync enqueues a log entry according to the configured
 // backpressure policy. Returns true if accepted, false if dropped.
 func (ap *AsyncPipeline) WriteAsync(entry *domain.LogEntry) bool {
+	// After Stop the workers are gone; report rejection so the caller
+	// falls back to WriteSync and the entry still reaches the sinks.
+	if ap.stopped.Load() {
+		return false
+	}
 	switch AsyncBackpressurePolicy(ap.policy.Load()) {
 	case DropOldest:
 		// Try fast path enqueue
@@ -131,26 +145,39 @@ func (ap *AsyncPipeline) WriteAsync(entry *domain.LogEntry) bool {
 }
 
 func (ap *AsyncPipeline) start() {
-	ap.wg.Add(1)
+	ap.batchWg.Add(1)
 	go ap.batchWorker()
 	for i := 0; i < ap.workerCount; i++ {
-		ap.wg.Add(1)
+		ap.sinkWg.Add(1)
 		go ap.sinkWorker()
 	}
 }
 func (ap *AsyncPipeline) batchWorker() {
-	defer ap.wg.Done()
+	defer ap.batchWg.Done()
 	batch := ap.batchPool.Get().([]*domain.LogEntry)
 	defer ap.batchPool.Put(batch)
 	ticker := time.NewTicker(ap.flushTimeout)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-ap.ctx.Done():
-			if len(batch) > 0 {
-				ap.flushBatch(batch)
+		case <-ap.quit:
+			// Drain whatever producers already enqueued, then flush the
+			// final batch. Dropping here is what used to lose every log
+			// a short-lived process wrote right before Close.
+			for {
+				select {
+				case entry := <-ap.logChan:
+					batch = append(batch, entry)
+					if len(batch) >= ap.batchSize {
+						ap.flushBatch(batch)
+						clear(batch)
+						batch = batch[:0]
+					}
+				default:
+					ap.flushBatch(batch)
+					return
+				}
 			}
-			return
 		case entry := <-ap.logChan:
 			batch = append(batch, entry)
 			if len(batch) >= ap.batchSize {
@@ -172,44 +199,64 @@ func (ap *AsyncPipeline) flushBatch(batch []*domain.LogEntry) {
 	if len(batch) == 0 {
 		return
 	}
-	copyBatch := make([]*domain.LogEntry, len(batch))
-	copy(copyBatch, batch)
-	select {
-	case ap.batchChan <- copyBatch:
+	// With no sink workers there is no consumer for batchChan — write
+	// inline instead of blocking forever on the send below.
+	if ap.workerCount <= 0 {
+		for _, e := range batch {
+			ap.WriteSync(e)
+			ap.processed.Add(1)
+		}
 		ap.batches.Add(1)
-	case <-ap.ctx.Done():
+		if ap.metricsHook != nil {
+			ap.metricsHook(ap.Stats())
+		}
 		return
 	}
+	copyBatch := make([]*domain.LogEntry, len(batch))
+	copy(copyBatch, batch)
+	// Blocking send is safe: sink workers only exit after batchChan is
+	// closed by Stop, which happens strictly after this worker returns.
+	ap.batchChan <- copyBatch
+	ap.batches.Add(1)
 	if ap.metricsHook != nil {
 		ap.metricsHook(ap.Stats())
 	}
 }
 
 func (ap *AsyncPipeline) sinkWorker() {
-	defer ap.wg.Done()
-	for {
-		select {
-		case <-ap.ctx.Done():
-			return
-		case batch := <-ap.batchChan:
-			for _, e := range batch {
-				for _, s := range ap.sinks {
-					if s != nil {
-						if err := s.Write(e); err != nil {
-							ap.errors.Add(1)
-						}
+	defer ap.sinkWg.Done()
+	for batch := range ap.batchChan {
+		for _, e := range batch {
+			for _, s := range ap.sinks {
+				if s != nil {
+					if err := s.Write(e); err != nil {
+						ap.errors.Add(1)
 					}
 				}
-				ap.processed.Add(1)
 			}
-			if ap.metricsHook != nil {
-				ap.metricsHook(ap.Stats())
-			}
+			ap.processed.Add(1)
+		}
+		if ap.metricsHook != nil {
+			ap.metricsHook(ap.Stats())
 		}
 	}
 }
 
-func (ap *AsyncPipeline) Stop() { ap.cancel(); ap.wg.Wait() }
+// Stop drains the pipeline before shutting it down: pending entries in
+// logChan are batched and flushed, in-flight batches are written by the
+// sink workers, and only then do the goroutines exit. Safe to call more
+// than once. Writes issued after Stop are rejected by WriteAsync so
+// callers fall back to their synchronous path.
+func (ap *AsyncPipeline) Stop() {
+	ap.stopOnce.Do(func() {
+		ap.stopped.Store(true)
+		close(ap.quit)
+		ap.batchWg.Wait()
+		close(ap.batchChan)
+		ap.sinkWg.Wait()
+		ap.cancel()
+	})
+}
 
 type AsyncStats struct{ Processed, Dropped, Batches, Errors, QueueSize uint64 }
 
