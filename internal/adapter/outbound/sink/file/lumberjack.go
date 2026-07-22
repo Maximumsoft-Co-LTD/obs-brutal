@@ -31,15 +31,33 @@ func (s *LumberjackSink) Write(entry *domain.LogEntry) error {
 	if entry == nil {
 		return nil
 	}
+	// Capture the logger under the lock. Previously Write dereferenced
+	// s.lj outside the mutex while Configure set s.lj = nil under it, so
+	// a concurrent reconfigure could nil-panic the write and the field
+	// access raced. lumberjack.Logger.Write is itself goroutine-safe, so
+	// only the pointer read needs the lock.
 	s.mu.Lock()
 	s.ensure()
+	lj := s.lj
 	s.mu.Unlock()
 	b, err := util.EncodeEntryToJSON(entry)
 	if err != nil {
 		return err
 	}
-	_, err = s.lj.Write(b)
+	_, err = lj.Write(b)
 	return err
+}
+
+// Close releases the underlying rotating file handle.
+func (s *LumberjackSink) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lj != nil {
+		err := s.lj.Close()
+		s.lj = nil
+		return err
+	}
+	return nil
 }
 func (s *LumberjackSink) Name() string { return "lumberjack" }
 func (s *LumberjackSink) Configure(cfg map[string]interface{}) error {
@@ -60,6 +78,11 @@ func (s *LumberjackSink) Configure(cfg map[string]interface{}) error {
 	if v, ok := cfg["compress"].(bool); ok {
 		s.compress = v
 	}
-	s.lj = nil
+	// Drop the old logger so the next Write rebuilds with the new config.
+	// Close it first so its file handle isn't leaked on reconfigure.
+	if s.lj != nil {
+		_ = s.lj.Close()
+		s.lj = nil
+	}
 	return nil
 }

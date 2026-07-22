@@ -89,6 +89,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Performance budget tests skip themselves under `-race` (the budgets
   are sized for uninstrumented builds), so `go test -race ./...` now
   runs clean as a whole.
+- Alert sinks (Slack / Telegram / Opsgenie) hardened (found by a
+  parallel bug-hunt over the untested sink packages, each finding
+  reproduced by a failing test before the fix):
+  - Transport errors no longer leak the secret-bearing request URL
+    (Telegram bot token, Slack webhook) into the error returned from
+    `Write`; failures are reported by category only.
+  - Permanent 4xx responses are no longer retried (a revoked webhook
+    was hammered 5×/entry); only 5xx and 429 are retryable.
+  - The retry loop is bounded by a total time budget and per-attempt
+    context timeout, so a dead alert endpoint can no longer stall the
+    synchronous log path for ~28s per entry.
+  - `Configure` now locks, fixing a data race with `Write` on the
+    webhook/token/endpoint fields.
+- `async.Sink` (async wrapper) fixed: `Close` now drains queued entries
+  instead of racing its workers into dropping them, `Write` after
+  `Close` drops quietly instead of panicking on a closed channel,
+  `Close` propagates to the wrapped inner sink, and `Close` is
+  idempotent. The broken `WithTimeout` helper (auto-closed the sink
+  permanently while claiming "periodic flush") was removed.
+- `buffered.BufferedSink` fixed: `Close` is idempotent (double close no
+  longer panics), and `flushLocked` no longer swallows inner-sink write
+  errors while discarding the entries — failed entries are retained for
+  the next flush (bounded, oldest-dropped) and the error is surfaced.
+- File sinks fixed: `LumberjackSink.Write` captures the logger under the
+  lock (no more nil-panic/race when `Configure` rebuilds it);
+  `OptimalFileSink` locks `Configure`, honors a filename change after
+  the first write, no longer truncates the live log when a rotation
+  rename fails (append-only reopen), no longer wedges permanently after
+  a failed rotation reopen, and both file sinks now implement `Close`
+  (the file handle was previously leaked on shutdown).
 - `Init` called twice now closes the previous default before replacing
   it, so the old async pipeline + OTel exporter no longer leak.
 - `MaskEmail` operates on runes instead of bytes; multi-byte local
