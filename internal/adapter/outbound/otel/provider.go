@@ -41,43 +41,71 @@ type Provider struct {
 	promRegistry *promcli.Registry
 }
 
+// NewOTelProvider builds the tracer + meter provider.
+//
+// The OTLP exporters are gated on endpoint: with a non-empty endpoint,
+// traces and metrics are exported to the collector. With an EMPTY
+// endpoint the providers are still built (AlwaysSample tracer, in-process
+// prometheus meter) but nothing is exported — this is the "no OTLP
+// exporter" mode. The distinction matters because boeng always wants a
+// real tracer so spans get valid W3C contexts (trace_id in logs, and
+// traceparent propagation across process boundaries) even when no
+// collector is configured; only the export is optional.
 func NewOTelProvider(serviceName, version, environment, endpoint string) (*Provider, error) {
-	if endpoint == "" {
-		endpoint = "localhost:4317"
-	}
-	endpoint = sanitizeGrpcEndpoint(endpoint)
+	exporting := endpoint != ""
 	res, err := resource.Merge(resource.Default(), resource.NewWithAttributes("", semconv.ServiceName(serviceName), semconv.ServiceVersion(version), semconv.DeploymentEnvironment(environment)))
 	if err != nil {
 		return nil, err
 	}
-	traceExporter, err := otlptracegrpc.New(context.Background(), otlptracegrpc.WithEndpoint(endpoint), otlptracegrpc.WithInsecure())
-	if err != nil {
-		return nil, err
+
+	// When exporting, record fully (AlwaysSample). When not exporting,
+	// use NeverSample: the tracer still generates valid W3C span contexts
+	// — so trace_id/span_id reach the logs and traceparent propagates —
+	// but the spans are non-recording, avoiding the cost of recording
+	// attributes nothing will ever export.
+	sampler := sdktrace.NeverSample()
+	if exporting {
+		sampler = sdktrace.AlwaysSample()
 	}
-	tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(traceExporter), sdktrace.WithResource(res), sdktrace.WithSampler(sdktrace.AlwaysSample()))
+	traceOpts := []sdktrace.TracerProviderOption{sdktrace.WithResource(res), sdktrace.WithSampler(sampler)}
 	promReg := promcli.NewRegistry()
 	promExporter, err := prometheus.New(prometheus.WithRegisterer(promReg))
 	if err != nil {
 		return nil, err
 	}
-	// Metrics must leave the process the same way traces do: via OTLP to
-	// the collector at Config.OTel. The prometheus reader above only
-	// feeds the in-process registry behind PrometheusHandler(), which
-	// nothing scrapes unless the application mounts it — with only that
-	// reader, per-op metrics never reached the documented compose stack.
-	metricExporter, err := otlpmetricgrpc.New(context.Background(), otlpmetricgrpc.WithEndpoint(endpoint), otlpmetricgrpc.WithInsecure())
-	if err != nil {
-		return nil, err
+	metricOpts := []sdkmetric.Option{sdkmetric.WithReader(promExporter), sdkmetric.WithResource(res)}
+
+	if exporting {
+		ep := sanitizeGrpcEndpoint(endpoint)
+		traceExporter, err := otlptracegrpc.New(context.Background(), otlptracegrpc.WithEndpoint(ep), otlptracegrpc.WithInsecure())
+		if err != nil {
+			return nil, err
+		}
+		traceOpts = append(traceOpts, sdktrace.WithBatcher(traceExporter))
+		// Metrics leave the process via OTLP the same way traces do; the
+		// prometheus reader above only feeds the in-process registry.
+		metricExporter, err := otlpmetricgrpc.New(context.Background(), otlpmetricgrpc.WithEndpoint(ep), otlpmetricgrpc.WithInsecure())
+		if err != nil {
+			return nil, err
+		}
+		metricOpts = append(metricOpts, sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter, sdkmetric.WithInterval(10*time.Second))))
 	}
-	mp := sdkmetric.NewMeterProvider(
-		sdkmetric.WithReader(promExporter),
-		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter, sdkmetric.WithInterval(10*time.Second))),
-		sdkmetric.WithResource(res),
-	)
+
+	tp := sdktrace.NewTracerProvider(traceOpts...)
+	mp := sdkmetric.NewMeterProvider(metricOpts...)
+
+	// Always install the tracer + propagator so span contexts and W3C
+	// propagation work regardless of export. Only take over the global
+	// meter provider when actually exporting — otherwise leave metric
+	// recording as a no-op (boeng's per-op metrics read the global meter)
+	// so a no-collector deployment keeps its previous zero-metric cost.
 	otel.SetTracerProvider(tp)
-	otel.SetMeterProvider(mp)
 	propagator := propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
 	otel.SetTextMapPropagator(propagator)
+	if exporting {
+		otel.SetMeterProvider(mp)
+	}
+
 	p := &Provider{ServiceName: serviceName, Version: version, Environment: environment, TraceProvider: tp, MetricProvider: mp, tracer: tp.Tracer(serviceName), meter: mp.Meter(serviceName), propagator: propagator, promRegistry: promReg}
 	if err := p.initMetrics(); err != nil {
 		return nil, err

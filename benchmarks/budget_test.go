@@ -21,25 +21,33 @@ import (
 
 // Budget — tightened just past observed CI numbers so a real
 // regression fails but normal noise doesn't.
+// Baselines reflect the always-on trace context: every op attaches
+// trace_id/span_id (a valid W3C context is minted even without an OTLP
+// exporter, so propagation and log correlation work with no collector),
+// which costs a few allocations per op. allocs/op and bytes/op are
+// deterministic across machines, so these are set just above the
+// observed M2 numbers; ns/op varies by machine and is gated only off-CI
+// (see assertBudget).
 const (
-	budgetRunNsPerOp     = 6_000 // observed M2: ~1.8 µs; budget 6 µs
-	budgetRunAllocsPerOp = 50    // observed M2: 35
-	budgetRunBytesPerOp  = 4_096 // observed M2: 2832 B
+	budgetRunNsPerOp     = 6_000 // observed M2: ~1.9 µs; budget 6 µs
+	budgetRunAllocsPerOp = 50    // observed M2: 37
+	budgetRunBytesPerOp  = 4_096 // observed M2: 2896 B
 
 	// The error path additionally records the error on the span and
-	// writes a full JSON error log line per op. During the measurement
-	// stdout is redirected to /dev/null (see silenceStdout) so the
-	// number covers encode + write cost without depending on how fast
-	// the environment drains stdout — GitHub's runner log pipe is slow
-	// enough to dominate the measurement otherwise, and a benchmark-
-	// sized loop of error lines also floods the CI log past its
-	// truncation limit. Budget 12 µs keeps the order-of-magnitude
-	// regression gate with room for slow 2-core runners.
-	budgetRunErrNsPerOp = 12_000
+	// writes a full JSON error log line per op (RecordError + the error
+	// field + the ERROR completion line). During the measurement stdout
+	// is redirected to /dev/null (see silenceStdout) so the number covers
+	// encode + write cost without depending on how fast the environment
+	// drains stdout. Budget 12 µs keeps the order-of-magnitude regression
+	// gate with room for slow 2-core runners; allocs/bytes sit just above
+	// the observed 77 allocs / 5259 B.
+	budgetRunErrNsPerOp     = 12_000
+	budgetRunErrAllocsPerOp = 95
+	budgetRunErrBytesPerOp  = 6_656
 
 	budgetEmitNsPerOp     = 3_000 // observed M2: ~980 ns; budget 3 µs
-	budgetEmitAllocsPerOp = 30    // observed M2: 21
-	budgetEmitBytesPerOp  = 2_500 // observed M2: 1664 B
+	budgetEmitAllocsPerOp = 30    // observed M2: 13
+	budgetEmitBytesPerOp  = 2_500 // observed M2: 1048 B
 
 	budgetStepNsPerOp     = 6_000 // step opens its own op; budget like Run
 	budgetStepAllocsPerOp = 50
@@ -93,8 +101,8 @@ func TestBudget_RunErrorPath(t *testing.T) {
 	restore()
 	// Error path is allowed to be heavier (records error on span,
 	// writes an error log) but must stay within the same order of
-	// magnitude — see budgetRunErrNsPerOp.
-	assertBudget(t, "Run-error", result, budgetRunErrNsPerOp, budgetRunAllocsPerOp+10, budgetRunBytesPerOp+1024)
+	// magnitude — see budgetRunErr* constants.
+	assertBudget(t, "Run-error", result, budgetRunErrNsPerOp, budgetRunErrAllocsPerOp, budgetRunErrBytesPerOp)
 }
 
 func TestBudget_Emit(t *testing.T) {

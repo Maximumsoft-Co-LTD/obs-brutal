@@ -58,6 +58,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`cli`, `cron`, `gin`, `http`, `mongo`, `rabbit`, `redis`).
 
 ### Fixed
+- Trace context now works without an OTLP exporter, fulfilling what
+  `Init` documents ("propagation works even when no OTLP exporter is
+  configured"). Previously a tracer was only installed when
+  `Config.OTel` was set, so with no collector `boeng.Run` minted no
+  span — meaning no `trace_id`/`span_id` in logs and no `traceparent`
+  to propagate across process boundaries. `Init` now always installs a
+  TracerProvider; only the OTLP *export* is gated on `Config.OTel`.
+  Without an exporter the tracer uses `NeverSample`, so spans are
+  non-recording (cheap) but still carry a valid W3C context — logs get
+  correlation ids and adapters (HTTP, RabbitMQ) propagate `traceparent`
+  with no collector. Per-op metric recording stays a no-op without a
+  collector (the global meter provider is only taken over when
+  exporting), so a no-OTel deployment keeps its prior metric cost.
+  Budget baselines rose accordingly (Run 26→37 allocs, Run-error
+  53→77) — the deterministic cost of attaching trace context to every
+  op; the golden log shape is unaffected (trace ids are redacted as
+  volatile).
 - `Obs.Close` bounds OTel shutdown with a 5s deadline instead of
   `context.Background()`. `TracerProvider`/`MeterProvider.Shutdown`
   flushes through the OTLP exporter, which retries on a dead collector,
