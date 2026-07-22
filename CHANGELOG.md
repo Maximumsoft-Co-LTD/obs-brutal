@@ -58,6 +58,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`cli`, `cron`, `gin`, `http`, `mongo`, `rabbit`, `redis`).
 
 ### Fixed
+- Metric-name cardinality now fails closed (the second half of G3).
+  `opMetricsFor` / `eventMetricsFor` cap the number of distinct
+  sanitized metric names at `maxDistinctMetricNames` (512); past the
+  cap, names route to a shared `overflow` series instead of minting a
+  new one. Previously the caches were unbounded maps, so any op name
+  built from high-cardinality data minted a new metric series per
+  unique value — leaking the map and able to OOM the downstream
+  Prometheus/Mimir. The overflow counter is the operator's signal.
+- HTTP / Gin / RabbitMQ adapters no longer build high-cardinality op
+  (hence metric) names from request data — which also protects the
+  shared name budget above so a chatty adapter can't starve an app's
+  business-op metrics:
+  - `boenghttp.Middleware` names the op `HTTP <METHOD>` instead of
+    `<METHOD> <raw-path>` (plain net/http exposes no route template);
+    the full path stays in the `http.path` field. Use `Wrap` with an
+    explicit name for per-route metrics.
+  - `boenggin.Middleware`'s unmatched-route fallback is `<METHOD>
+    [unmatched]` instead of the raw URL path (matched routes still use
+    the bounded `c.FullPath()` template).
+  - `boengrabbit.Publish` names the op `rabbit.publish <exchange>`
+    instead of `<exchange>/<routing-key>`; the routing key (which
+    routinely embeds ids) stays in the `messaging.rabbitmq.routing`
+    field.
 - `Close` now actually flushes the async pipeline: `AsyncPipeline.Stop`
   drains queued entries and lets sink workers finish in-flight batches
   before the goroutines exit. Previously Stop cancelled the workers
