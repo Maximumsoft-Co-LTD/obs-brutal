@@ -34,14 +34,13 @@ func Middleware(next http.Handler) http.Handler {
 			propagation.HeaderCarrier(r.Header),
 		)
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
-		// Name the op by method only. Plain net/http exposes no route
-		// template here, so embedding r.URL.Path would put a raw,
-		// id-bearing path into the metric name — exploding metric-name
-		// cardinality and eating the shared name budget that every other
-		// op draws from. The full path stays in the http.path field
-		// (trace/log), where cardinality is not a concern. Callers who
-		// want per-route metrics use Wrap with an explicit name.
-		name := "HTTP " + r.Method
+		// The op/span name keeps the path so traces stay per-endpoint.
+		// Metric-name cardinality is bounded downstream by the fail-closed
+		// cap in boeng's metrics layer, not by flattening the name here
+		// (which would also collide the server op with the client
+		// Transport op). Callers wanting clean per-route metric names use
+		// Wrap with an explicit name, or route via templated frameworks.
+		name := r.Method + " " + r.URL.Path
 		_ = boeng.Run(ctx, name, requestSubject(r), func(opCtx context.Context) error {
 			next.ServeHTTP(sw, r.WithContext(opCtx))
 			if sw.status >= 500 {

@@ -86,21 +86,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   built from high-cardinality data minted a new metric series per
   unique value — leaking the map and able to OOM the downstream
   Prometheus/Mimir. The overflow counter is the operator's signal.
-- HTTP / Gin / RabbitMQ adapters no longer build high-cardinality op
-  (hence metric) names from request data — which also protects the
-  shared name budget above so a chatty adapter can't starve an app's
-  business-op metrics:
-  - `boenghttp.Middleware` names the op `HTTP <METHOD>` instead of
-    `<METHOD> <raw-path>` (plain net/http exposes no route template);
-    the full path stays in the `http.path` field. Use `Wrap` with an
-    explicit name for per-route metrics.
-  - `boenggin.Middleware`'s unmatched-route fallback is `<METHOD>
-    [unmatched]` instead of the raw URL path (matched routes still use
-    the bounded `c.FullPath()` template).
-  - `boengrabbit.Publish` names the op `rabbit.publish <exchange>`
-    instead of `<exchange>/<routing-key>`; the routing key (which
-    routinely embeds ids) stays in the `messaging.rabbitmq.routing`
-    field.
+  The HTTP / Gin / RabbitMQ adapters keep their specific, per-endpoint
+  op/span names (`GET /users/:id`, `rabbit.publish <exchange>/<key>`)
+  so traces and logs stay granular — metric-name cardinality is bounded
+  by the fail-closed cap above, not by flattening the names.
 - `Close` now actually flushes the async pipeline: `AsyncPipeline.Stop`
   drains queued entries and lets sink workers finish in-flight batches
   before the goroutines exit. Previously Stop cancelled the workers
@@ -132,6 +121,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Performance budget tests skip themselves under `-race` (the budgets
   are sized for uninstrumented builds), so `go test -race ./...` now
   runs clean as a whole.
+- Performance budget: the `ns/op` gate is now informational on CI
+  (`CI=true`) rather than a hard failure. Wall-clock swings 3–10x on
+  shared CI runners (no CPU pinning, noisy neighbours), so it failed on
+  machine noise, not real regressions. The deterministic `allocs/op`
+  and `bytes/op` gates — which catch genuine regressions — still fail
+  the build everywhere; `ns/op` remains a hard gate on developer
+  machines.
 - Alert sinks (Slack / Telegram / Opsgenie) hardened (found by a
   parallel bug-hunt over the untested sink packages, each finding
   reproduced by a failing test before the fix):
