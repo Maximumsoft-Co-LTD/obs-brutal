@@ -80,6 +80,17 @@ func configureMetrics(cfg Config) {
 	allowed = append(allowed, cfg.MetricLabels...)
 	labelAllowed = toSet(allowed)
 
+	// Init installs a fresh global MeterProvider. Drop cached instruments
+	// so they rebind to the new provider on next use — otherwise a second
+	// Init (hot-reload, tests) leaves ops writing to the previous, now
+	// shut-down provider and their metrics silently vanish.
+	metricsMu.Lock()
+	opMetricsCache = map[string]*opMetricSet{}
+	evtMetricsCache = map[string]*eventMetricSet{}
+	opOverflow = nil
+	evtOverflow = nil
+	metricsMu.Unlock()
+
 	staticAttrs = staticAttrs[:0]
 	staticLabelKV = map[string]attribute.KeyValue{}
 	if cfg.Service != "" {

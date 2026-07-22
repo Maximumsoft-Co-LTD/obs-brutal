@@ -58,6 +58,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`cli`, `cron`, `gin`, `http`, `mongo`, `rabbit`, `redis`).
 
 ### Fixed
+- `Obs.Close` bounds OTel shutdown with a 5s deadline instead of
+  `context.Background()`. `TracerProvider`/`MeterProvider.Shutdown`
+  flushes through the OTLP exporter, which retries on a dead collector,
+  so an unbounded context made process exit block for the exporter's
+  full retry window (~1 min) whenever the collector was unreachable at
+  shutdown. Verified: against a black-hole endpoint Close now returns
+  in ~5s instead of hanging.
+- `configureMetrics` (called by `Init`) now resets the per-op and
+  per-event metric instrument caches. `Init` installs a fresh global
+  MeterProvider, so without the reset a second `Init` (hot-reload,
+  tests) left cached instruments bound to the previous, now shut-down
+  provider — their metrics silently stopped being recorded.
 - `RateSampler.ShouldSample` is now concurrency-safe. It ran on the
   OTel-mode logging hot path (every entry passes through the strategy
   Manager, which calls samplers under only a read lock, so many
