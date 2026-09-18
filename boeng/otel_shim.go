@@ -2,6 +2,7 @@ package boeng
 
 import (
 	"context"
+	"net/http"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -35,6 +36,20 @@ func (s *otelProviderShim) Shutdown(ctx context.Context) error {
 		return nil
 	}
 	return s.provider.Shutdown(ctx)
+}
+
+// InstallMeterProvider makes the provider's MeterProvider the global one
+// so boeng's per-op instruments record into the in-process registry —
+// unless the application owns the global already (MeterForeign).
+func (s *otelProviderShim) InstallMeterProvider() outboundotel.MeterInstall {
+	if s == nil || s.provider == nil {
+		return outboundotel.MeterForeign
+	}
+	return s.provider.InstallMeterProvider()
+}
+
+func (s *otelProviderShim) PrometheusHandler() http.Handler {
+	return s.provider.PrometheusHandler()
 }
 
 // noopSpan is returned when OTEL is disabled, so callers don't need nil checks.

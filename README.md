@@ -359,6 +359,13 @@ apply these rules verbatim:
 - Use `boenghttp.Transport(...)` for outgoing HTTP, `boenggin.Middleware()`
   for Gin servers, `boengmongo.CommandMonitor()`, `boengredis.Hook()`,
   `boengrabbit.Publish` / `boengrabbit.Consume` for those backends.
+- Configure OpenTelemetry once. If the service already installs its own
+  `TracerProvider` / `MeterProvider` / propagator, leave `Config.OTel`
+  empty and boeng joins that pipeline. Set `Config.OTel` (a URL,
+  `http://` or `https://`) only when boeng should be the exporter, and
+  never copy `OTEL_EXPORTER_OTLP_ENDPOINT` into it as well.
+- Mount `obs.MetricsHandler()` on the application's existing HTTP server
+  when Prometheus must scrape; do not open a second listener for it.
 
 **DO NOT**
 
@@ -389,7 +396,10 @@ four verbs or the operation-handle methods. See [`CHANGELOG.md`](./CHANGELOG.md)
 
 | Layer | Status |
 | ----- | ------ |
-| Unit | ✅ `boeng/{fields,enter,run,metrics}_test.go` |
+| Unit | ✅ `boeng/{fields,enter,run,metrics,levels,l_spancontext}_test.go` |
+| Metric surface | ✅ `boeng/{metrics_handler,metrics_labeled}_test.go` |
+| OTel coexistence | ✅ `boeng/{otel_env,propagator,tracer_adopt,meter_adopt}_test.go` + `internal/adapter/outbound/otel/endpoint_test.go` |
+| Dependency guard | ✅ `boeng/deps_guard_test.go` |
 | Verification | ✅ `boeng/verify_test.go` |
 | Runtime Guarantees | ✅ `boeng/guarantees_test.go` (G1–G7, see `boeng/README.md`) |
 | API Freeze | ✅ `boeng/api_freeze_test.go` |
@@ -404,4 +414,4 @@ Governance: [COMPATIBILITY.md](./COMPATIBILITY.md) defines the v1.x
 semver contract. [ARCHITECTURE.md](./ARCHITECTURE.md) sketches the
 mental model in one diagram.
 
-> Verified against `3529acc` · 2026-07-22
+> Verified against `6148b99` · 2026-09-18

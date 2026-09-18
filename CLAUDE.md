@@ -103,10 +103,18 @@ radius. Touch them only with a corresponding test update:
 - `boeng/enter.go` — operation handle + `Step` + `CloseWith` panic
   re-raise. Subtle re-panic ordering; do not "simplify".
   Tests: `boeng/enter_test.go`, `boeng/guarantees_test.go`.
-- `boeng/metrics.go` — per-op metric naming + cardinality allowlist.
-  Changes here can break G3 (cardinality fail-closed) and the SLO of
-  every downstream Prometheus deployment.
-  Tests: `boeng/metrics_test.go`, `boeng/guarantees_test.go`.
+- `boeng/metrics.go` — per-op metric naming, the labeled schema, and
+  the cardinality allowlist. Changes here can break G3 (cardinality
+  fail-closed) and the SLO of every downstream Prometheus deployment.
+  Tests: `boeng/metrics_test.go`, `boeng/metrics_labeled_test.go`,
+  `boeng/metrics_handler_test.go`, `boeng/guarantees_test.go`.
+- `boeng/boeng.go` `Init` + `internal/adapter/outbound/otel/provider.go`
+  — where spans and metrics go (explicit endpoint → own provider;
+  application provider → adopt; env → export; nothing → local), and
+  the rule that boeng never replaces or shuts down an application's
+  TracerProvider / MeterProvider / propagator.
+  Tests: `boeng/otel_env_test.go`, `boeng/tracer_adopt_test.go`,
+  `boeng/meter_adopt_test.go`, `boeng/propagator_test.go`.
 - `boeng/fields.go` — Loggable + reflection fallback + sensitive-key
   auto-masking. UTF-8-safe; rune-counted.
   Tests: `boeng/fields_test.go` (includes multibyte regression cases).
@@ -165,7 +173,7 @@ questions" as they appear.
 
 <!-- HUMAN_AUTHORED_END -->
 
-> Verified against `0d0a832` · 2026-07-22
+> Verified against `6148b99` · 2026-09-18
 
 <!-- claude-foundation:rules-imports:start (managed block — re-synced by install.sh; edit rules in .claude/rules/, not here) -->
 ## Always-on fundamentals

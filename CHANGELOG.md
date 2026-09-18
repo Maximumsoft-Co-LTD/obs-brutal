@@ -6,7 +6,76 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-_Nothing yet._
+Driven by the hash-central / slip-verify adoption report on v1.2.4.
+
+### Added
+- `Config.QuietOps` — demotes the success-path `<op> completed` line to
+  DEBUG so production can run at `Level: InfoLevel` with events visible
+  and no INFO line per operation. `<op> failed` stays ERROR.
+- `Config.EmitLevel` — level of `Emit` / `op.Emit` event lines (zero =
+  INFO). Set `WarnLevel` when a deployment runs at `WarnLevel` and still
+  needs its per-request summary events.
+- `(*Obs).MetricsHandler()` — serves the in-process Prometheus registry
+  (`<op>_total`, `<op>_duration_ms_*`, `<op>_error_total`,
+  `<op>_panic_total`, `<event>_total`) for pull-based scraping when the
+  OTLP collector does not accept metrics. With `Config.OTel` empty the
+  first call turns metric recording on.
+- `boeng.L(ctx)` now recovers `trace_id` / `span_id` from any valid OTel
+  span in `ctx` (otelhttp, otelgin, hand-rolled middleware), not only
+  from spans boeng opened. A boeng operation in `ctx` still takes
+  priority.
+- `Config.MetricSchema` with `PerOpMetrics` (default, unchanged),
+  `LabeledMetrics` and `BothMetrics`. `LabeledMetrics` emits one fixed
+  family — `boeng_operation_duration_seconds{op,outcome}` (seconds,
+  1 ms…10 s buckets, `_count` is the total) and
+  `boeng_events_total{event}` — so `sum by (op)` works and no series is
+  minted per operation name. `op` shares the 512-distinct-names cap.
+- `boeng/README.md`: "Which lines you see at which level", "Reserved
+  keys", "Names as Prometheus sees them", "Pull-based /metrics", and the
+  `http://` scheme guidance for `Config.OTel` /
+  `OTEL_EXPORTER_OTLP_ENDPOINT`.
+
+### Changed
+- boeng now joins an existing OpenTelemetry setup instead of replacing
+  it. With no endpoint configured and an SDK `TracerProvider` already
+  installed by the application, `Init` opens spans on that provider
+  (resource, sampler, exporter all the application's) and leaves it
+  running on `Close`. This takes precedence over an
+  `OTEL_EXPORTER_OTLP_ENDPOINT` in the environment, which is assumed to
+  belong to the application's pipeline; an explicit `Config.OTel` still
+  wins. Previously `Init` always installed a private provider as the
+  process global.
+- boeng never replaces an application-installed SDK `MeterProvider`:
+  its instruments record into it, and `MetricsHandler` answers 503 with
+  an explanation instead of installing boeng's own provider over it.
+- `Init` no longer overwrites a propagator the process already set. The
+  `TraceContext + Baggage` composite is installed only when the global
+  propagator is empty.
+- `Run` / `Enter` without a prior `Init` open spans on the global
+  tracer instead of returning a no-op span.
+- The core `boeng` package no longer links Gin (and, through it, quic-go
+  and the Mongo BSON library) into consumers. The unused Gin-bound
+  helpers in the internal `logtrc` facade and the internal
+  `adapter/inbound/log` package were removed; `boeng/gin` is the Gin
+  integration. `TestCoreBoengLinksNoFrameworks` guards this.
+- `Config.OTel` is now a URL per the OTel exporter spec and the scheme
+  decides transport: `https://…` dials with TLS (system roots) — before
+  1.3.0 the scheme was stripped and every endpoint was dialled in
+  plaintext. `http://…` and bare `host:port` keep dialling plaintext.
+- `Config.OTel` empty no longer means "never export". When
+  `OTEL_EXPORTER_OTLP_ENDPOINT` (or `_TRACES_ENDPOINT` /
+  `_METRICS_ENDPOINT`) is set in the environment, boeng exports and lets
+  the SDK read endpoint, headers, timeout and certificates from the env,
+  as every OTel SDK does. `Config.Service` is still required to export.
+  **A service that set that variable while relying on an empty
+  `Config.OTel` to stay silent will start exporting.** Unset the
+  variable to keep the old behaviour.
+- `<op>_duration_ms` histogram no longer declares OTel unit `ms`. The
+  Prometheus exporter and collector translations were appending the
+  unit, producing `<op>_duration_ms_milliseconds_bucket`; the series is
+  now `<op>_duration_ms_bucket` / `_sum` / `_count` as documented.
+  **Dashboards and alerts written against the `_milliseconds` name must
+  be updated.**
 
 ## [1.2.3] - 2026-07-22
 
@@ -280,4 +349,4 @@ references only in a documented major-version bump.
 [Unreleased]: https://github.com/Maximumsoft-Co-LTD/obs-brutal/compare/v1.2.3...HEAD
 [1.2.3]: https://github.com/Maximumsoft-Co-LTD/obs-brutal/releases/tag/v1.2.3
 
-> Verified against `3529acc` · 2026-07-22
+> Verified against `6148b99` · 2026-09-18

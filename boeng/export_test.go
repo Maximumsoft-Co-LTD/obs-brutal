@@ -12,3 +12,11 @@ var SanitizeMetricNameForTest = sanitizeMetricName
 
 // MetricLabelsForTest exposes metricLabels for cardinality-guard tests.
 var MetricLabelsForTest = metricLabels
+
+// ResetDefaultForTest clears the package default so tests can exercise
+// the "Init never called" paths.
+func ResetDefaultForTest() {
+	mu.Lock()
+	def = nil
+	mu.Unlock()
+}

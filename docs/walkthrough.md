@@ -19,6 +19,15 @@ them. Everything else is exact.
 
 ---
 
+> All log lines below use the default `Config.Level` (nothing filtered)
+> and default levels: `started` DEBUG, `completed` INFO, `failed` ERROR,
+> `Emit` INFO. `Config.QuietOps` moves `completed` to DEBUG;
+> `Config.EmitLevel` raises the event line. All metric names use the
+> default `PerOpMetrics` schema; under `Config.MetricSchema:
+> boeng.LabeledMetrics` every `<op>_*` family below collapses into
+> `boeng_operation_duration_seconds{op="<op>",outcome=...}` and every
+> `<event>_total` into `boeng_events_total{event="<event>"}`.
+
 ## How to read each scenario
 
 - **Goal** — one sentence.
@@ -371,4 +380,4 @@ Redis → Mongo and asserts every hop produces a boeng operation.
 - [`ai/guardrails.md`](./ai/guardrails.md) — explicit DO / DO NOT
   rules when writing boeng code.
 
-> Verified against `0d0a832` · 2026-07-22
+> Verified against `6148b99` · 2026-09-18

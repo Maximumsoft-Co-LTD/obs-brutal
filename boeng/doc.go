@@ -101,16 +101,31 @@
 //
 // # Metrics and cardinality
 //
-// Every operation auto-emits four metrics: <op>_total, <op>_duration_ms,
-// <op>_error_total, <op>_panic_total. Step does the same for child
-// operations. The metric label set is fail-closed: only keys in
-// Config.MetricLabels (plus service + env) are promoted to labels.
-// Subject fields like user_id stay in logs and traces but are never
-// silently elevated to metric labels.
+// By default every operation auto-emits four metrics: <op>_total,
+// <op>_duration_ms, <op>_error_total, <op>_panic_total. Step does the
+// same for child operations. Config.MetricSchema = LabeledMetrics
+// switches to one fixed family with the operation as a label
+// (boeng_operation_duration_seconds{op,outcome}, boeng_events_total{event})
+// so PromQL can aggregate across operations; BothMetrics emits both.
+// The metric label set is fail-closed: only keys in Config.MetricLabels
+// (plus service + env) are promoted to labels. Subject fields like
+// user_id stay in logs and traces but are never silently elevated to
+// metric labels.
 //
-// # Without OTel
+// # Log levels
 //
-// If Config.OTel is empty or the collector is unreachable, boeng runs
-// purely against the configured sinks (stdout JSON by default).
-// Application code is identical either way; nothing panics.
+// Config.Level filters everything. Config.QuietOps demotes the
+// "<op> completed" line to DEBUG (failures stay ERROR); Config.EmitLevel
+// raises the level of Emit event lines (INFO by default).
+//
+// # Where telemetry goes
+//
+// Config.OTel set → boeng builds and installs its own exporting
+// TracerProvider (http:// plaintext, https:// TLS). Config.OTel empty
+// and the application already installed an SDK TracerProvider → boeng
+// opens spans on it and touches nothing global. Otherwise, with
+// OTEL_EXPORTER_OTLP_ENDPOINT in the environment boeng exports and lets
+// the SDK read the env; with nothing at all it still opens spans (valid
+// trace_id, W3C propagation) but exports nothing. An unreachable
+// collector never panics; logs keep flowing to the configured sinks.
 package boeng

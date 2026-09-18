@@ -56,6 +56,7 @@ var freezeRefs = func() any {
 	_ = boeng.D
 	_ = (*boeng.Obs).Close
 	_ = (*boeng.Obs).Log
+	_ = (*boeng.Obs).MetricsHandler
 	_ = boeng.L
 	_ = boeng.Run
 	_ = boeng.RunR[int] // generic instantiation must compile
@@ -76,6 +77,10 @@ var freezeRefs = func() any {
 	_ = boeng.WarnLevel
 	_ = boeng.ErrorLevel
 	_ = boeng.FatalLevel
+	var _ boeng.MetricSchema
+	_ = boeng.PerOpMetrics
+	_ = boeng.LabeledMetrics
+	_ = boeng.BothMetrics
 
 	// ----- adapter: boeng/gin -----
 	_ = boenggin.Middleware
