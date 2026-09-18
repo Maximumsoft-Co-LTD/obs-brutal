@@ -15,6 +15,7 @@ Start here, load only the leaf doc you need.
 | Tracking what changed between releases   | [`../CHANGELOG.md`](../CHANGELOG.md)                      |
 | Investigating a failing test             | [`testing.md`](./testing.md)                              |
 | Tuning observability / SLOs              | [`../boeng/README.md`](../boeng/README.md) Metrics + Cardinality sections |
+| Getting one trace across two or more services | [`../boeng/README.md`](../boeng/README.md) "Tracing across services" |
 | Adding boeng to a service that already configures OpenTelemetry | [`../boeng/README.md`](../boeng/README.md) "Living inside an existing OTel setup" |
 
 ## Canonical documents

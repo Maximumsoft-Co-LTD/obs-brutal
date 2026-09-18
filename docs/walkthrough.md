@@ -355,7 +355,11 @@ down a metrics backend.
 
 In-process scenarios above run without an OTel collector. The HTTP
 propagation case is verified separately because it requires two
-endpoints. See
+endpoints. The how-to — which adapter injects and extracts, what your
+code must do (thread `ctx`, same backend, the sampled flag) and how to
+inject by hand for transports without an adapter — is
+["Tracing across services"](../boeng/README.md#tracing-across-services)
+in the package README. See
 [`boeng/http/propagation_test.go`](../boeng/http/propagation_test.go),
 which asserts:
 

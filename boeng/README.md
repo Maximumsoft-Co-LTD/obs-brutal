@@ -455,6 +455,71 @@ opened by something else (otelhttp, otelgin, a gRPC interceptor, your
 own middleware), `boeng.L(ctx)` stamps that span's ids instead, so lines
 written under third-party spans still join the trace.
 
+## Tracing across services
+
+boeng carries trace context between processes with W3C Trace Context
+(`traceparent` / `tracestate` headers) — the same format every OTel SDK
+speaks, so the other side does not need boeng, or Go. Nothing to
+configure: `Init` makes sure a propagator exists (and keeps one the
+process already set).
+
+| Hop                 | Caller side                                   | Callee side                                                        |
+| ------------------- | --------------------------------------------- | ------------------------------------------------------------------ |
+| HTTP                | `&http.Client{Transport: boenghttp.Transport(nil)}` injects the header | `boenghttp.Middleware(mux)` or `boenggin.Middleware()` extracts it and opens the request op as a child |
+| RabbitMQ            | `boengrabbit.Publish(ctx, ch, exchange, key, msg)` writes it into AMQP headers | `boengrabbit.Consume(queue, handler)` reads it and opens the delivery op as a child |
+| Same process        | pass the `ctx` that `Run` / `EnterCtx` hands you | —                                                                  |
+
+Minimal two-service shape (see [`examples/http`](../examples/http)):
+
+```go
+// service A — caller
+client := &http.Client{Transport: boenghttp.Transport(nil)}
+err := boeng.Run(ctx, "checkout", order, func(ctx context.Context) error {
+    req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, body) // ctx carries the span
+    _, err := client.Do(req)                                               // header injected here
+    return err
+})
+
+// service B — callee
+mux.HandleFunc("/charge", func(w http.ResponseWriter, r *http.Request) {
+    _ = boeng.Run(r.Context(), "charge", nil, func(ctx context.Context) error { // child of A's span
+        return chargeCard(ctx)
+    })
+})
+srv := &http.Server{Addr: ":8081", Handler: boenghttp.Middleware(mux)}
+```
+
+Both services log the same `trace_id`; with a shared backend the two
+spans render as one trace.
+
+What has to be true on your side:
+
+1. **Thread `ctx` all the way.** A `context.Background()` created in the
+   middle of a request starts a new, unrelated trace. This is the usual
+   cause of "the trace stops at service B".
+2. **Use an adapter at every boundary, or inject by hand.** For a
+   transport without a boeng adapter (gRPC, Kafka, SQS, …) use that
+   transport's OTel instrumentation, or inject/extract yourself with
+   the global propagator — it is the same propagator boeng uses:
+   ```go
+   otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(headers))
+   ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(headers))
+   ```
+3. **Export both sides to the same backend.** Propagation makes the ids
+   match; only export makes the picture. A service with no endpoint
+   still passes `traceparent` on, but its own spans exist only as
+   `trace_id` / `span_id` in its logs.
+4. **Mind the sampled flag.** With no collector boeng samples nothing
+   (`sampled=0` in the outgoing `traceparent`). A downstream boeng
+   service in export mode records anyway (AlwaysSample), but a plain
+   OTel service with the default parent-based sampler will honour the
+   flag and drop the trace. In production give the *first* service an
+   endpoint too; do not rely on downstream services to record for it.
+
+Verified by [`boeng/http/propagation_test.go`](./http/propagation_test.go)
+(two real endpoints, one `trace_id`) and, across Gin → RabbitMQ →
+Redis → Mongo, by [`boeng/integration/chain_test.go`](./integration/chain_test.go).
+
 ## Local stack
 
 The full observability stack (OTel Collector → Tempo + Prometheus +
