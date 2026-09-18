@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -56,10 +57,34 @@ func setField(ctx context.Context, key string, value any) {
 
 // L returns the op-scoped logger from ctx, falling back to the package default.
 // Most callers don't need this — Run/Emit/Log cover the common cases.
+//
+// Correlation comes from the innermost boeng operation in ctx. When ctx
+// carries no boeng operation but does carry a valid OTel span opened by
+// someone else (otelhttp, otelgin, a gRPC interceptor, hand-rolled
+// middleware), L stamps that span's trace_id/span_id instead, so log
+// lines written under third-party spans still join the trace.
 func L(ctx context.Context) logtrc.LogBrt {
 	if s := stateFrom(ctx); s != nil {
 		return s.logger()
 	}
+	root := rootLogger()
+	if ctx == nil {
+		return root
+	}
+	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
+		return root.Fs(map[string]any{
+			"trace_id": sc.TraceID().String(),
+			"span_id":  sc.SpanID().String(),
+		})
+	}
+	return root
+}
+
+// rootLogger is the package-default logger without any ctx-derived
+// correlation. startOp uses it directly because it stamps the new op's own
+// span context anyway; going through L would clone the field map twice
+// whenever the parent is a raw OTel span.
+func rootLogger() logtrc.LogBrt {
 	if d := D(); d != nil {
 		return d.log
 	}
@@ -132,7 +157,8 @@ func Emit(ctx context.Context, name string, subject any) {
 		s.span.AddEvent(name, trace.WithAttributes(mapToAttrs(fields)...))
 	}
 	recordEvent(ctx, name, metricLabels(subject))
-	L(ctx).Fs(fields).Info(name)
+	_, lvl := currentLevels()
+	logAt(L(ctx).Fs(fields), lvl, name)
 }
 
 // logInScope writes an INFO line in the current operation's logger scope.
@@ -155,7 +181,10 @@ func startOp(ctx context.Context, name string, subject any) (context.Context, fu
 	if d != nil && d.provider != nil {
 		ctx, span = d.provider.Start(ctx, name)
 	} else {
-		span = noopSpan{}
+		// Init never called (or its provider failed): still open the span
+		// on whatever TracerProvider the process installed. With none,
+		// the global no-op tracer yields a non-recording span at no cost.
+		ctx, span = otel.Tracer("boeng").Start(ctx, name)
 	}
 
 	fields := map[string]any{"op": name}
@@ -165,7 +194,12 @@ func startOp(ctx context.Context, name string, subject any) (context.Context, fu
 		span.SetAttributes(mapToAttrs(fields)...)
 	}
 
-	base := L(ctx).Fs(fields)
+	var base logtrc.LogBrt
+	if s := stateFrom(ctx); s != nil {
+		base = s.logger().Fs(fields)
+	} else {
+		base = rootLogger().Fs(fields)
+	}
 	if sc := span.SpanContext(); sc.IsValid() {
 		// One Fs (single field-map clone) instead of chained TraceID().F()
 		// — trace context is attached to every op now, so this is on the
@@ -188,6 +222,8 @@ func startOp(ctx context.Context, name string, subject any) (context.Context, fu
 			state.span.RecordError(err)
 			state.span.SetStatus(codes.Error, err.Error())
 			l.WithError(err).Error(state.name + " failed")
+		} else if quiet, _ := currentLevels(); quiet {
+			l.Debug(state.name + " completed")
 		} else {
 			l.Info(state.name + " completed")
 		}

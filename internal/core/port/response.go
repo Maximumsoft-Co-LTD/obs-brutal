@@ -1,8 +1,9 @@
 package port
 
-import "github.com/gin-gonic/gin"
-
-// ResponseBuilder is the minimal interface used by core options/trace
+// ResponseBuilder is the minimal interface used by core options/trace.
+// The Gin-bound factory that used to accompany it was removed so the
+// core ports carry no web-framework dependency; the supported Gin
+// integration is the public boeng/gin package.
 type ResponseBuilder interface {
 	Msg(string)
 	Body(interface{})
@@ -11,12 +12,4 @@ type ResponseBuilder interface {
 	Prt(bool)
 	Err(error) error
 	Send()
-}
-
-// ResponseBuilderFactory constructs a builder bound to Gin and status
-type ResponseBuilderFactory interface {
-	New(g *gin.Context, printer interface {
-		Prt(format string, args ...interface{})
-		GetTraceID() string
-	}, status int) ResponseBuilder
 }

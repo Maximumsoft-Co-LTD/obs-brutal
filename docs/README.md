@@ -15,6 +15,8 @@ Start here, load only the leaf doc you need.
 | Tracking what changed between releases   | [`../CHANGELOG.md`](../CHANGELOG.md)                      |
 | Investigating a failing test             | [`testing.md`](./testing.md)                              |
 | Tuning observability / SLOs              | [`../boeng/README.md`](../boeng/README.md) Metrics + Cardinality sections |
+| Getting one trace across two or more services | [`../boeng/README.md`](../boeng/README.md) "Tracing across services" |
+| Adding boeng to a service that already configures OpenTelemetry | [`../boeng/README.md`](../boeng/README.md) "Living inside an existing OTel setup" |
 
 ## Canonical documents
 
@@ -80,7 +82,25 @@ shipping; today's reproducible numbers supersede it.
 
 ## Open questions
 
-None at the moment. Add new ones here when they appear so future
-sessions don't re-discover them silently.
+Surfaced by the v1.2.4 adoption reports (hash-central / slip-verify and
+shinonsen-obs); the code side shipped in the unreleased 1.3 work, these
+need a human decision:
 
-> Verified against `3529acc` · 2026-07-22
+- **Release version.** The unreleased changes alter documented
+  behaviour (`https://` now TLS, env endpoint now exports, an
+  application's providers are adopted, Prometheus series renamed from
+  `_ms_milliseconds` to `_ms`). Under a strict reading of
+  [`../COMPATIBILITY.md`](../COMPATIBILITY.md) that is a major bump;
+  the CHANGELOG records them under "Changed" pending the call between
+  v1.3.0-with-notes and v2.0.0.
+- **LICENSE.** The module ships no license file. A downstream team
+  declined to depend on it for that reason alone. Owner's choice.
+- **Default metric schema.** `Config.MetricSchema` defaults to
+  `PerOpMetrics`; the plan is to flip to `LabeledMetrics` in the next
+  major. Confirm the `op` / `outcome` label names against consumers'
+  metric conventions before that flip.
+- **`prometheus/client_golang` in core.** Still linked into every
+  consumer because it backs `MetricsHandler`. Moving `/metrics` to a
+  sub-package would remove it at the cost of an API move.
+
+> Verified against `6148b99` · 2026-09-18

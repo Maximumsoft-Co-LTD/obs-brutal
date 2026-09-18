@@ -52,8 +52,10 @@ ladder, **stop**. boeng already does that — you're writing it twice.
   }
   ```
   Each step gets its own span, log, duration histogram, and metric
-  family (`validate_total`, `validate_duration_ms`, etc.). A step that
-  fails marks the parent op as failed automatically.
+  family (`validate_total`, `validate_duration_ms`, etc. — or, under
+  `Config.MetricSchema: boeng.LabeledMetrics`, `op="validate"` on the
+  shared `boeng_operation_duration_seconds` family). A step that fails
+  marks the parent op as failed automatically.
 
 - **Use adapters for framework boundaries**:
   - HTTP server: `boenghttp.Middleware(handler)` or `boenghttp.Wrap("name", handler)`.
@@ -66,6 +68,17 @@ ladder, **stop**. boeng already does that — you're writing it twice.
 
 - **Use `boeng.L(ctx).F("k", v).Info("msg")` only for ad-hoc mid-flow
   log lines**. Most logs are automatic via `Run`/`Enter`.
+
+- **Configure OpenTelemetry once.** If the service already installs its
+  own `TracerProvider` / `MeterProvider` / propagator, leave
+  `Config.OTel` empty: boeng joins that pipeline. Set `Config.OTel`
+  (as a URL, `http://` or `https://`) only when boeng is the one that
+  should export. Never copy `OTEL_EXPORTER_OTLP_ENDPOINT` into
+  `Config.OTel` as well.
+
+- **Mount `obs.MetricsHandler()` on the application's existing HTTP
+  server** when a pull path is needed; do not open a second listener
+  for it.
 
 ## DO NOT
 
@@ -152,4 +165,4 @@ boeng, not in your code.
 
 None at the moment.
 
-> Verified against `0d0a832` · 2026-07-22
+> Verified against `6148b99` · 2026-09-18

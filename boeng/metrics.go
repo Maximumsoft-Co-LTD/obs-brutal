@@ -13,6 +13,56 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
+// MetricSchema selects the shape of boeng's per-operation metrics.
+type MetricSchema int
+
+const (
+	// PerOpMetrics (default, v1.x shape): one metric family per operation
+	// name — <op>_total, <op>_duration_ms, <op>_error_total,
+	// <op>_panic_total, <event>_total.
+	PerOpMetrics MetricSchema = iota
+	// LabeledMetrics: one fixed family, the operation as a label —
+	// boeng_operation_duration_seconds{op, outcome} (outcome = ok | error |
+	// panic; its _count is the operation total) and boeng_events_total{event}.
+	LabeledMetrics
+	// BothMetrics emits both shapes. Use it while dashboards migrate.
+	BothMetrics
+)
+
+func (m MetricSchema) perOp() bool   { return m == PerOpMetrics || m == BothMetrics }
+func (m MetricSchema) labeled() bool { return m == LabeledMetrics || m == BothMetrics }
+
+// Labeled-schema instrument and label names. Kept in one place so a
+// deployment standard that spells them differently is a one-line change.
+const (
+	labeledOpDurationName = "boeng.operation.duration" // → boeng_operation_duration_seconds
+	labeledEventsName     = "boeng.events"             // → boeng_events_total
+	labelOp               = "op"
+	labelOutcome          = "outcome"
+	labelEvent            = "event"
+	outcomeOK             = "ok"
+	outcomeError          = "error"
+	outcomePanic          = "panic"
+)
+
+// labeledDurationBuckets are explicit seconds boundaries for the labeled
+// histogram: OTel's defaults are millisecond-shaped, so a seconds
+// histogram needs its own. 1 ms … 10 s covers request-serving services.
+var labeledDurationBuckets = []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
+
+// labeledMetricSet is the single instrument family used by LabeledMetrics.
+type labeledMetricSet struct {
+	duration metric.Float64Histogram
+	events   metric.Int64Counter
+}
+
+var (
+	labeledMu   sync.RWMutex
+	labeledSet  *labeledMetricSet
+	labeledOps  = map[string]struct{}{} // distinct op label values seen (cap = maxDistinctMetricNames)
+	metricShape MetricSchema
+)
+
 // defaultMetricLabels is the minimal allowlist used when Config.MetricLabels
 // is left empty. Both are bounded by operational reality (service count and
 // environment count are small) so they're safe defaults.
@@ -80,16 +130,17 @@ func configureMetrics(cfg Config) {
 	allowed = append(allowed, cfg.MetricLabels...)
 	labelAllowed = toSet(allowed)
 
+	labeledMu.Lock()
+	metricShape = cfg.MetricSchema
+	labeledSet = nil
+	labeledOps = map[string]struct{}{}
+	labeledMu.Unlock()
+
 	// Init installs a fresh global MeterProvider. Drop cached instruments
 	// so they rebind to the new provider on next use — otherwise a second
 	// Init (hot-reload, tests) leaves ops writing to the previous, now
 	// shut-down provider and their metrics silently vanish.
-	metricsMu.Lock()
-	opMetricsCache = map[string]*opMetricSet{}
-	evtMetricsCache = map[string]*eventMetricSet{}
-	opOverflow = nil
-	evtOverflow = nil
-	metricsMu.Unlock()
+	resetMetricInstruments()
 
 	staticAttrs = staticAttrs[:0]
 	staticLabelKV = map[string]attribute.KeyValue{}
@@ -103,6 +154,85 @@ func configureMetrics(cfg Config) {
 		staticAttrs = append(staticAttrs, kv)
 		staticLabelKV["env"] = kv
 	}
+}
+
+// resetMetricInstruments drops every cached instrument so the next op or
+// event rebinds against whatever otel.GetMeterProvider() returns now.
+func resetMetricInstruments() {
+	metricsMu.Lock()
+	opMetricsCache = map[string]*opMetricSet{}
+	evtMetricsCache = map[string]*eventMetricSet{}
+	opOverflow = nil
+	evtOverflow = nil
+	metricsMu.Unlock()
+	labeledMu.Lock()
+	labeledSet = nil
+	labeledMu.Unlock()
+}
+
+func currentSchema() MetricSchema {
+	labeledMu.RLock()
+	defer labeledMu.RUnlock()
+	return metricShape
+}
+
+// labeledMetrics returns the fixed instrument family, creating it on
+// first use against the current global MeterProvider.
+func labeledMetrics() *labeledMetricSet {
+	labeledMu.RLock()
+	if labeledSet != nil {
+		labeledMu.RUnlock()
+		return labeledSet
+	}
+	labeledMu.RUnlock()
+
+	labeledMu.Lock()
+	defer labeledMu.Unlock()
+	if labeledSet != nil {
+		return labeledSet
+	}
+	meter := otel.GetMeterProvider().Meter("boeng")
+	set := &labeledMetricSet{}
+	if h, err := meter.Float64Histogram(labeledOpDurationName,
+		metric.WithUnit("s"),
+		metric.WithDescription("Duration of boeng operations; _count is the operation total"),
+		metric.WithExplicitBucketBoundaries(labeledDurationBuckets...),
+	); err == nil {
+		set.duration = h
+	}
+	if c, err := meter.Int64Counter(labeledEventsName,
+		metric.WithDescription("boeng Emit events"),
+	); err == nil {
+		set.events = c
+	}
+	labeledSet = set
+	return set
+}
+
+// labeledOpValue is the op label value: the sanitized name (identical to
+// the legacy metric-name stem) bounded by the same distinct-name cap, so
+// LabeledMetrics cannot mint more label values than PerOpMetrics could
+// mint metric names (G3).
+func labeledOpValue(name string) string {
+	safe := sanitizeMetricName(name)
+	labeledMu.RLock()
+	_, seen := labeledOps[safe]
+	n := len(labeledOps)
+	labeledMu.RUnlock()
+	if seen {
+		return safe
+	}
+	if n >= maxDistinctMetricNames {
+		return "overflow"
+	}
+	labeledMu.Lock()
+	if len(labeledOps) < maxDistinctMetricNames {
+		labeledOps[safe] = struct{}{}
+	} else {
+		safe = "overflow"
+	}
+	labeledMu.Unlock()
+	return safe
 }
 
 func opMetricsFor(name string) *opMetricSet {
@@ -139,7 +269,11 @@ func newOpMetricSet(safe string) *opMetricSet {
 	if s.total, err = meter.Int64Counter(safe + "_total"); err != nil {
 		return &opMetricSet{}
 	}
-	if s.duration, err = meter.Float64Histogram(safe+"_duration_ms", metric.WithUnit("ms")); err != nil {
+	// No metric.WithUnit here on purpose: the Prometheus exporter (and the
+	// collector's Prometheus translation) append the unit to the metric
+	// name, which turned the documented <op>_duration_ms into
+	// <op>_duration_ms_milliseconds_bucket. The name already says ms.
+	if s.duration, err = meter.Float64Histogram(safe + "_duration_ms"); err != nil {
 		return &opMetricSet{}
 	}
 	if s.errors, err = meter.Int64Counter(safe + "_error_total"); err != nil {
@@ -218,6 +352,25 @@ func metricLabels(subject any) []attribute.KeyValue {
 // <op>_error_total and <op>_panic_total, and records duration into the histogram.
 // panicked implies errored. labels are reused across all four metrics.
 func recordOp(ctx context.Context, name string, dur time.Duration, errored, panicked bool, labels []attribute.KeyValue) {
+	schema := currentSchema()
+	if schema.labeled() {
+		outcome := outcomeOK
+		switch {
+		case panicked:
+			outcome = outcomePanic
+		case errored:
+			outcome = outcomeError
+		}
+		attrs := make([]attribute.KeyValue, 0, len(labels)+2)
+		attrs = append(attrs, attribute.String(labelOp, labeledOpValue(name)), attribute.String(labelOutcome, outcome))
+		attrs = append(attrs, labels...)
+		if lm := labeledMetrics(); lm.duration != nil {
+			lm.duration.Record(ctx, dur.Seconds(), metric.WithAttributes(attrs...))
+		}
+	}
+	if !schema.perOp() {
+		return
+	}
 	m := opMetricsFor(name)
 	opts := []metric.AddOption{metric.WithAttributes(labels...)}
 	histOpts := []metric.RecordOption{metric.WithAttributes(labels...)}
@@ -237,6 +390,18 @@ func recordOp(ctx context.Context, name string, dur time.Duration, errored, pani
 
 // recordEvent bumps the per-event counter (cheap; events don't have duration).
 func recordEvent(ctx context.Context, name string, labels []attribute.KeyValue) {
+	schema := currentSchema()
+	if schema.labeled() {
+		attrs := make([]attribute.KeyValue, 0, len(labels)+1)
+		attrs = append(attrs, attribute.String(labelEvent, labeledOpValue(name)))
+		attrs = append(attrs, labels...)
+		if lm := labeledMetrics(); lm.events != nil {
+			lm.events.Add(ctx, 1, metric.WithAttributes(attrs...))
+		}
+	}
+	if !schema.perOp() {
+		return
+	}
 	m := eventMetricsFor(name)
 	if m.total != nil {
 		m.total.Add(ctx, 1, metric.WithAttributes(labels...))

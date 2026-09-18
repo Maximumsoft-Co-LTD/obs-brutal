@@ -25,9 +25,12 @@ Concretely, semver applies to:
   (`datetime`, `level`, `msg`, `service`, `env`, `op`, `user_id`,
   `module`, `tenant_id`, `trace_id`, `span_id`, `request_id`,
   `duration_ms`, `error`, plus user fields).
-- The names of auto-generated metrics: `<op>_total`,
+- The names of auto-generated metrics under the default
+  `Config.MetricSchema` (`PerOpMetrics`): `<op>_total`,
   `<op>_duration_ms`, `<op>_error_total`, `<op>_panic_total`,
-  `<event>_total`.
+  `<event>_total`; and under `LabeledMetrics` / `BothMetrics`:
+  `boeng_operation_duration_seconds{op,outcome}` and
+  `boeng_events_total{event}` including those label names.
 
 ## NOT covered by semver
 
@@ -104,4 +107,4 @@ rather than slipping the change into v1.x silently.
 Bumping the minimum supported Go version is itself a breaking change
 under this policy.
 
-> Verified against `3529acc` · 2026-07-22
+> Verified against `6148b99` · 2026-09-18

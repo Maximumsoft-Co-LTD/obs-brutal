@@ -10,7 +10,7 @@ check**. If a layer below goes red, a documented promise has broken.
 ## Layers
 
 ### 1. Unit tests
-**Where:** `boeng/{fields,enter,run,metrics}_test.go`, internal package `*_test.go`.
+**Where:** `boeng/{fields,enter,run,metrics,levels,l_spancontext,metrics_handler,metrics_labeled}_test.go`, internal package `*_test.go`.
 **Proves:** each individual function does what its godoc says, in isolation.
 **Run:** `go test ./boeng/`
 
@@ -104,6 +104,26 @@ Budgets are set ~3× observed M2 numbers to absorb CI runner variance.
 A regression past any line fails CI.
 **Run:** `go test -run TestBudget ./benchmarks/`
 
+### 12. OTel coexistence
+**Where:** `boeng/{otel_env,propagator,tracer_adopt,meter_adopt}_test.go`,
+`internal/adapter/outbound/otel/endpoint_test.go`.
+**Proves:** `Config.OTel` URL → transport (`https://` TLS, `http://` /
+bare plaintext); export via `OTEL_EXPORTER_OTLP_ENDPOINT` when
+`Config.OTel` is empty; an application-installed TracerProvider,
+MeterProvider or propagator is adopted, never replaced or shut down
+(spans land in the app's exporter, metrics in the app's reader,
+`MetricsHandler` answers 503 instead of taking over); `Run` without
+`Init` uses the global tracer. Export-mode tests talk to an in-process
+gRPC server that answers `Unimplemented`, so `Close` returns at once.
+**Run:** `go test -run "TestInit_|TestRun_WithoutInit|TestObs_|TestResolveEndpoint|TestExportConfigured" ./boeng/ ./internal/adapter/outbound/otel/`
+
+### 13. Dependency guard
+**Where:** `boeng/deps_guard_test.go`.
+**Proves:** `go list -deps` of the core `boeng` package contains no Gin,
+quic-go, Mongo, RabbitMQ or Redis package — adapters pay for their own
+frameworks. Skipped under `-short`.
+**Run:** `go test -run TestCoreBoengLinksNoFrameworks ./boeng/`
+
 ## CI matrix
 
 [`../.github/workflows/test.yml`](../.github/workflows/test.yml) runs
@@ -111,7 +131,7 @@ three jobs per push:
 
 | Job | Layers covered |
 | --- | -------------- |
-| `unit` | 1, 2, 3, 4, 5, 6, 7, 8, 11 (everything backend-free) |
+| `unit` | 1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13 (everything backend-free) |
 | `integration` | 9 (with MongoDB / Redis / RabbitMQ as GitHub Actions services) |
 | `benchmark` | 10 (smoke gate that benchmarks still compile + produce output) |
 
@@ -129,4 +149,4 @@ symbol is in the freeze list** (currently 100%, enforced by layer 4).
 
 None. Add new ones here when they appear.
 
-> Verified against `0d0a832` · 2026-07-22
+> Verified against `6148b99` · 2026-09-18

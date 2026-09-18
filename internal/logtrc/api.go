@@ -5,20 +5,16 @@
 package logtrc
 
 import (
-    "time"
-
-	inboundlog "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/inbound/log"
 	outboundotel "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/otel"
 	alertsink "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/sink/alerts"
 	cfgopts "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/sink/options"
 	telem "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/adapter/outbound/telemetry"
 	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/domain"
-    "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
+	"github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/port"
 	service "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service"
 	secsvc "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/core/service/security"
 	sfactory "github.com/Maximumsoft-Co-LTD/obs-brutal/internal/shared"
-
-	"github.com/gin-gonic/gin"
+	"time"
 )
 
 // ===== SIMPLIFIED CORE TYPES =====
@@ -40,40 +36,6 @@ type LogBrt = service.LogBrt
 
 // Sink is the output sink interface exposed by the facade.
 type Sink = port.Sink
-
-// LogTrc combines logging with a minimal response builder for web apps.
-// Obtain it via GetLogTrcFrmGin.
-type LogTrc struct {
-    log LogBrt
-    gin *gin.Context
-}
-
-// Prt prints a formatted message using the underlying logger (Info level).
-func (lt *LogTrc) Prt(format string, args ...interface{}) { lt.log.Infof(format, args...) }
-
-// GetTraceID extracts the trace ID from the bound Gin request context (if any).
-func (lt *LogTrc) GetTraceID() string {
-	if lt == nil || lt.gin == nil || lt.gin.Request == nil {
-		return ""
-	}
-	if v := lt.gin.Request.Context().Value("trace_id"); v != nil {
-		if s, ok := v.(string); ok {
-			return s
-		}
-	}
-	return ""
-}
-
-// R builds a response using the inbound adapter's SimpleResponseBuilder and applies options.
-func (lt *LogTrc) R(status int, opts ...cfgopts.ResponseOption) port.ResponseBuilder {
-    rb := inboundlog.NewSimpleResponseBuilder(lt.gin, lt, status)
-    for _, opt := range opts {
-        if opt != nil {
-            opt(rb)
-        }
-    }
-    return rb
-}
 
 // OTelLogBrt is the OpenTelemetry-enabled logger type (re-export).
 type OTelLogBrt = service.OTelLogBrt
@@ -153,11 +115,12 @@ func NewOTelWithService(serviceName, version, environment, endpoint string, leve
 
 // NewAsyncLogBrt creates an async logger with the given sinks.
 func NewAsyncLogBrt(level Level, sinks ...Sink) *AsyncLogBrt {
-    return service.NewAsyncLogBrt(level, sinks...)
+	return service.NewAsyncLogBrt(level, sinks...)
 }
+
 // NewAsyncCfg creates an async logger with custom batch/workers/timeout.
 func NewAsyncCfg(batchSize, workers int, timeout time.Duration, level Level, sinks ...Sink) *AsyncLogBrt {
-    return service.NewAsyncLogBrtCfg(batchSize, workers, timeout, level, sinks...)
+	return service.NewAsyncLogBrtCfg(batchSize, workers, timeout, level, sinks...)
 }
 
 // NewSecurityLogBrt creates an OTEL logger with security features enabled
@@ -192,11 +155,12 @@ func NewBufferedSink() Sink { return sinkFactory.Buffered() }
 
 // NewBufferedSinkWith returns a buffered sink with custom size/timeout.
 func NewBufferedSinkWith(size int, timeout time.Duration) Sink {
-    return sinkFactory.BufferedWith(size, timeout)
+	return sinkFactory.BufferedWith(size, timeout)
 }
+
 // NewBufferedWrap wraps an inner sink with a buffer.
 func NewBufferedWrap(inner Sink, size int, timeout time.Duration) Sink {
-    return sinkFactory.BufferedWrap(inner, size, timeout)
+	return sinkFactory.BufferedWrap(inner, size, timeout)
 }
 
 // Advanced sinks
@@ -256,72 +220,17 @@ var (
 
 // Response options factory
 var (
-    Opts = cfgopts.NewResponseOpts()
+	Opts = cfgopts.NewResponseOpts()
 )
 
 // ConfigOption configures the logBrt and integrations.
 type ConfigOption = cfgopts.ConfigOption
 
-// ===== LOGTRC INTEGRATION =====
-
-// GetLogTrcFrmGin gets LogTrc from Gin context with options.
-// It auto-binds TraceID/SpanID and connects to the observability stack.
-func GetLogTrcFrmGin(c *gin.Context, operation string, o ...ConfigOption) *LogTrc {
-    // attach operation as a field for convenience
-    base := GetLog(c).F("operation", operation)
-    return &LogTrc{log: base, gin: c}
-}
-
-// ===== BACKWARD COMPATIBILITY =====
-
-// ===== GIN INTEGRATION (SIMPLIFIED) =====
-
-// Middleware creates Gin middleware that propagates context and attaches logBrt.
-func Middleware(serviceName string) gin.HandlerFunc {
-    base := New().F("service", serviceName)
-    return gin.HandlerFunc(func(c *gin.Context) {
-        start := time.Now()
-        log := base.
-            Ctx(c.Request.Context()).
-            RequestID(domain.GenerateID("req")).
-            F("method", c.Request.Method).
-			F("path", c.Request.URL.Path).
-			F("ip", c.ClientIP())
-
-		c.Set("log", log)
-		c.Next()
-
-		log.F("status", c.Writer.Status()).
-			F("duration_ms", time.Since(start).Milliseconds()).
-			Info("Request completed")
-	})
-}
-
-// GetLog extracts logBrt from Gin context (simplified)
-func GetLog(c *gin.Context) LogBrt {
-	if logBrt, exists := c.Get("log"); exists {
-		if log, ok := logBrt.(LogBrt); ok {
-			return log
-		}
-	}
-	return NewDefault()
-}
-
-// GetOTelLog extracts OTEL-aware logBrt from Gin context (fallback to GetLog if not present)
-func GetOTelLog(c *gin.Context) LogBrt {
-	if logBrt, exists := c.Get("otel_log"); exists {
-		if log, ok := logBrt.(LogBrt); ok {
-			return log
-		}
-	}
-	return GetLog(c)
-}
-
-// OTelMiddleware creates Gin middleware with full OTEL integration.
-// Fallback to basic Middleware if inbound adapter is not available.
-func OTelMiddleware(_ *OTelLogBrt) gin.HandlerFunc {
-	return Middleware("otel")
-}
+// The Gin-bound helpers that used to live here (LogTrc, GetLogTrcFrmGin,
+// Middleware, GetLog, GetOTelLog, OTelMiddleware) were removed: they had
+// no callers once boeng became the public surface, and importing Gin from
+// this facade linked gin + quic-go + mongo bson into every consumer of the
+// core boeng package. The supported Gin integration is boeng/gin.
 
 // ===== CORRELATION UTILITIES =====
 
