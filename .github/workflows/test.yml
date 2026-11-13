@@ -11,7 +11,7 @@ permissions:
 jobs:
   unit:
     name: vet + unit + verification + guarantees + golden + freeze
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -27,7 +27,7 @@ jobs:
 
   integration:
     name: integration (mongo + redis + rabbitmq + chain)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     services:
       mongo:
         image: mongo:7
@@ -69,7 +69,7 @@ jobs:
 
   benchmark:
     name: benchmark smoke
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
